@@ -2,8 +2,9 @@
 
 Financial simulation CLI — portfolio tracker and long-term wealth planner with Canadian (Ontario) tax support.
 
-![Configure](screenshot-configure.png)
-![Plan table](screenshot-plan-table.png)
+<img src="screenshot-configure.png" width="69%">
+<img src="screenshot-plan-table.png" width="100%">
+<img src="screenshot-tax-breakdown.png" width="43%">
 
 ## Install
 
@@ -53,6 +54,18 @@ prospero plan run --every 1
 # View saved config
 prospero plan show-config
 ```
+
+### Tax Breakdown
+
+```bash
+# Show a detailed tax breakdown for a given income
+prospero tax-breakdown --income 150000
+
+# Uses your configured salary if --income is omitted
+prospero tax-breakdown
+```
+
+Breaks down federal income tax, Ontario income tax (including surtax), CPP1, CPP2, and EI — showing the amount and percentage of gross for each component.
 
 ### Tax Support
 

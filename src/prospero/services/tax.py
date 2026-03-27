@@ -4,6 +4,7 @@ Uses 2025 rates/brackets as a baseline. Brackets are indexed to inflation each y
 via the `bracket_inflation_pct` parameter in PlannerConfig.
 """
 
+from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
 TWO_PLACES = Decimal("0.01")
@@ -90,21 +91,33 @@ def _inflate(value: Decimal, years: int, rate: Decimal) -> Decimal:
     return (value * (1 + rate) ** years).quantize(TWO_PLACES, ROUND_HALF_UP)
 
 
+@dataclass
+class TaxBreakdown:
+    income: Decimal
+    federal: Decimal
+    ontario_base: Decimal
+    ontario_surtax: Decimal
+    cpp1: Decimal
+    cpp2: Decimal
+    ei: Decimal
+
+    @property
+    def ontario(self) -> Decimal:
+        return self.ontario_base + self.ontario_surtax
+
+    @property
+    def total(self) -> Decimal:
+        return self.federal + self.ontario + self.cpp1 + self.cpp2 + self.ei
+
+    @property
+    def take_home(self) -> Decimal:
+        return self.income - self.total
+
+
 def calculate_cpp(employment_income: Decimal, years_from_base: int = 0, inflation_rate: Decimal = Decimal("0")) -> Decimal:
     """Calculate CPP + CPP2 employee contributions."""
-    max_pensionable = _inflate(CPP_MAX_PENSIONABLE, years_from_base, inflation_rate)
-    basic_exemption = CPP_BASIC_EXEMPTION  # not indexed
-    cpp2_max = _inflate(CPP2_MAX_PENSIONABLE, years_from_base, inflation_rate)
-
-    # CPP1: on income between basic exemption and max pensionable
-    cpp1_earnings = max(Decimal("0"), min(employment_income, max_pensionable) - basic_exemption)
-    cpp1 = (cpp1_earnings * CPP_RATE).quantize(TWO_PLACES, ROUND_HALF_UP)
-
-    # CPP2: on income between CPP max pensionable and CPP2 max
-    cpp2_earnings = max(Decimal("0"), min(employment_income, cpp2_max) - max_pensionable)
-    cpp2 = (cpp2_earnings * CPP2_RATE).quantize(TWO_PLACES, ROUND_HALF_UP)
-
-    return cpp1 + cpp2
+    breakdown = calculate_tax_breakdown(employment_income, years_from_base, inflation_rate)
+    return breakdown.cpp1 + breakdown.cpp2
 
 
 def calculate_ei(employment_income: Decimal, years_from_base: int = 0, inflation_rate: Decimal = Decimal("0")) -> Decimal:
@@ -114,12 +127,12 @@ def calculate_ei(employment_income: Decimal, years_from_base: int = 0, inflation
     return (insurable * EI_RATE).quantize(TWO_PLACES, ROUND_HALF_UP)
 
 
-def calculate_total_tax(
+def calculate_tax_breakdown(
     employment_income: Decimal,
     years_from_base: int = 0,
     inflation_rate: Decimal = Decimal("0"),
-) -> Decimal:
-    """Calculate total tax burden: federal + Ontario + CPP + EI."""
+) -> TaxBreakdown:
+    """Calculate full tax breakdown: federal, Ontario (base + surtax), CPP1, CPP2, EI."""
     federal_brackets = _inflate_brackets(FEDERAL_BRACKETS, years_from_base, inflation_rate)
     ontario_brackets = _inflate_brackets(ONTARIO_BRACKETS, years_from_base, inflation_rate)
     federal_bpa = _inflate(FEDERAL_BPA, years_from_base, inflation_rate)
@@ -128,7 +141,6 @@ def calculate_total_tax(
     federal = _progressive_tax(employment_income, federal_brackets, federal_bpa)
     ontario_base = _progressive_tax(employment_income, ontario_brackets, ontario_bpa)
 
-    # Ontario surtax
     surtax_t1 = _inflate(ONTARIO_SURTAX_THRESHOLD_1, years_from_base, inflation_rate)
     surtax_t2 = _inflate(ONTARIO_SURTAX_THRESHOLD_2, years_from_base, inflation_rate)
     ontario_surtax = Decimal("0")
@@ -138,8 +150,31 @@ def calculate_total_tax(
         ontario_surtax += (ontario_base - surtax_t2) * ONTARIO_SURTAX_RATE_2
     ontario_surtax = ontario_surtax.quantize(TWO_PLACES, ROUND_HALF_UP)
 
-    ontario = ontario_base + ontario_surtax
-    cpp = calculate_cpp(employment_income, years_from_base, inflation_rate)
-    ei = calculate_ei(employment_income, years_from_base, inflation_rate)
+    max_pensionable = _inflate(CPP_MAX_PENSIONABLE, years_from_base, inflation_rate)
+    cpp2_max = _inflate(CPP2_MAX_PENSIONABLE, years_from_base, inflation_rate)
+    cpp1_earnings = max(Decimal("0"), min(employment_income, max_pensionable) - CPP_BASIC_EXEMPTION)
+    cpp1 = (cpp1_earnings * CPP_RATE).quantize(TWO_PLACES, ROUND_HALF_UP)
+    cpp2_earnings = max(Decimal("0"), min(employment_income, cpp2_max) - max_pensionable)
+    cpp2 = (cpp2_earnings * CPP2_RATE).quantize(TWO_PLACES, ROUND_HALF_UP)
 
-    return federal + ontario + cpp + ei
+    max_insurable = _inflate(EI_MAX_INSURABLE, years_from_base, inflation_rate)
+    ei = (min(employment_income, max_insurable) * EI_RATE).quantize(TWO_PLACES, ROUND_HALF_UP)
+
+    return TaxBreakdown(
+        income=employment_income,
+        federal=federal,
+        ontario_base=ontario_base,
+        ontario_surtax=ontario_surtax,
+        cpp1=cpp1,
+        cpp2=cpp2,
+        ei=ei,
+    )
+
+
+def calculate_total_tax(
+    employment_income: Decimal,
+    years_from_base: int = 0,
+    inflation_rate: Decimal = Decimal("0"),
+) -> Decimal:
+    """Calculate total tax burden: federal + Ontario + CPP + EI."""
+    return calculate_tax_breakdown(employment_income, years_from_base, inflation_rate).total

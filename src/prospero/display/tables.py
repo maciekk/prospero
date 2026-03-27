@@ -7,6 +7,7 @@ from rich.text import Text
 
 from prospero.models.planner import PlannerConfig, PlanSummary
 from prospero.models.portfolio import PortfolioSummary, HoldingValuation, Portfolio
+from prospero.services.tax import TaxBreakdown
 
 console = Console()
 
@@ -139,6 +140,40 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
         grid.add_row(l, m, r)
 
     console.print(Panel(grid, title="Summary"))
+
+
+def render_tax_breakdown(breakdown: TaxBreakdown) -> None:
+    def _pct_of_income(value: Decimal) -> str:
+        if breakdown.income == 0:
+            return "  —  "
+        return f"{value / breakdown.income * 100:.1f}%"
+
+    table = Table(
+        title=f"Tax breakdown for {_money_whole(breakdown.income)} income\n(2025 base rates, ON)",
+        show_header=True,
+        show_lines=False,
+        expand=False,
+    )
+    table.add_column("Component", ratio=5)
+    table.add_column("Amount", justify="right", ratio=3)
+    table.add_column("% of gross", justify="right", ratio=2)
+
+    def row(label: str, value: Decimal, style: str | None = None) -> None:
+        table.add_row(label, _money_whole(value), _pct_of_income(value), style=style)
+
+    row("Federal income tax", breakdown.federal)
+    row("Ontario income tax", breakdown.ontario_base)
+    if breakdown.ontario_surtax > 0:
+        row("  └─ surtax", breakdown.ontario_surtax, style="dim")
+    row("CPP1", breakdown.cpp1)
+    if breakdown.cpp2 > 0:
+        row("CPP2", breakdown.cpp2)
+    row("EI", breakdown.ei)
+    table.add_section()
+    row("Total deductions", breakdown.total, style="bold")
+    row("Take-home", breakdown.take_home, style="bold green")
+
+    console.print(table)
 
 
 # --- Portfolio ---

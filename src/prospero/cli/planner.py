@@ -96,6 +96,7 @@ def run(
     render_plan_summary(summary, config, every_n=every_n)
 
 
+
 @app.command("show-config")
 def show_config() -> None:
     """Show the current planner configuration."""
