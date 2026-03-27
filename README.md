@@ -2,6 +2,9 @@
 
 Financial simulation CLI — portfolio tracker and long-term wealth planner with Canadian (Ontario) tax support.
 
+![Configure](screenshot-configure.png)
+![Plan table](screenshot-plan-table.png)
+
 ## Install
 
 ```bash
