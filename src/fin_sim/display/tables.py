@@ -15,6 +15,16 @@ def _money(value: Decimal) -> str:
     return f"${value:,.2f}"
 
 
+def _money_whole(value: Decimal) -> str:
+    return f"${value:,.0f}"
+
+
+def _money_k(value: Decimal) -> str:
+    """Format as $XXK (thousands), rounded to nearest thousand."""
+    thousands = int(value / 1000)
+    return f"${thousands:,}K"
+
+
 def _pct(value: Decimal) -> str:
     return f"{value:,.2f}%"
 
@@ -73,21 +83,21 @@ def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
             table.add_row(
                 str(p.age),
                 str(p.year),
-                _money(p.income),
-                _money(p.taxes),
-                _money(p.net_income),
-                _money(p.expenses),
-                _money(p.savings_contribution),
-                _money(p.investment_growth),
-                _money(p.net_worth),
+                _money_whole(p.income),
+                _money_whole(p.taxes),
+                _money_whole(p.net_income),
+                _money_whole(p.expenses),
+                _money_k(p.savings_contribution),
+                _money_k(p.investment_growth),
+                _money_whole(p.net_worth),
                 style=style,
             )
 
     console.print(table)
 
     # Summary panel
-    lines = [f"Peak net worth: {_money(summary.peak_net_worth)}"]
-    lines.append(f"Final net worth: {_money(summary.final_net_worth)}")
+    lines = [f"Peak net worth: {_money_whole(summary.peak_net_worth)}"]
+    lines.append(f"Final net worth: {_money_whole(summary.final_net_worth)}")
     if summary.fire_age is not None:
         lines.append(f"FIRE age (4% rule): {summary.fire_age}")
     else:

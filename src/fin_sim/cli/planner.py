@@ -14,13 +14,18 @@ app = typer.Typer(help="Long-term wealth planner")
 console = Console()
 
 
+def _parse_dollars(value: str) -> Decimal:
+    """Parse a dollar amount, allowing optional commas (e.g. '4,000,000')."""
+    return Decimal(value.replace(",", ""))
+
+
 @app.command()
 def configure(
     current_age: int = typer.Option(..., prompt=True, help="Your current age"),
     life_expectancy: int = typer.Option(90, prompt=True, help="Estimated life expectancy"),
-    current_savings: float = typer.Option(0, prompt=True, help="Current total savings/investments"),
-    yearly_salary: float = typer.Option(..., prompt=True, help="Current yearly salary/compensation"),
-    yearly_expenses: float = typer.Option(..., prompt=True, help="Estimated yearly expenses"),
+    current_savings: str = typer.Option("0", prompt=True, help="Current total savings/investments"),
+    yearly_salary: str = typer.Option(..., prompt=True, help="Current yearly salary/compensation"),
+    yearly_expenses: str = typer.Option(..., prompt=True, help="Estimated yearly expenses"),
     annual_return_pct: float = typer.Option(7.0, prompt=True, help="Expected annual investment return %"),
     inflation_pct: float = typer.Option(3.0, prompt=True, help="Expected annual inflation %"),
     salary_growth_pct: float = typer.Option(3.0, prompt=True, help="Expected annual salary growth %"),
@@ -30,9 +35,9 @@ def configure(
     config = PlannerConfig(
         current_age=current_age,
         life_expectancy=life_expectancy,
-        current_savings=Decimal(str(current_savings)),
-        yearly_salary=Decimal(str(yearly_salary)),
-        yearly_expenses=Decimal(str(yearly_expenses)),
+        current_savings=_parse_dollars(current_savings),
+        yearly_salary=_parse_dollars(yearly_salary),
+        yearly_expenses=_parse_dollars(yearly_expenses),
         annual_return_pct=Decimal(str(annual_return_pct)),
         inflation_pct=Decimal(str(inflation_pct)),
         salary_growth_pct=Decimal(str(salary_growth_pct)),
