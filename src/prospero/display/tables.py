@@ -102,8 +102,9 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
         left.append("FIRE age:           not reached")
 
     mid: list[str] = []
+    mid.append("Income changes:")
+    mid.append(f"  Age {config.current_age}: {_money_whole(config.yearly_salary)}/yr (start)")
     if transition_ages:
-        mid.append("Income changes:")
         for p in summary.projections:
             if p.age in transition_ages:
                 if p.income == 0:
@@ -111,6 +112,8 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
                 else:
                     desc = f"salary \u2192 {_money_whole(p.income)}/yr"
                 mid.append(f"  Age {p.age}: {desc}")
+    if not transition_ages:
+        mid.append("  (none)")
 
     def _pct1(v: Decimal) -> str:
         return f"{v:.1f}%"
