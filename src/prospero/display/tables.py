@@ -97,18 +97,18 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
     left.append(f"Peak net worth:     {_money_whole(summary.peak_net_worth)}")
     left.append(f"Final net worth:    {_money_whole(summary.final_net_worth)}")
     if summary.fire_age is not None:
-        left.append(f"FIRE age (4% rule): {summary.fire_age}")
+        left.append(f"[yellow]FIRE[/yellow] age (4% rule): {summary.fire_age}")
     else:
-        left.append("FIRE age:           not reached")
+        left.append("[yellow]FIRE[/yellow] age:           not reached")
 
     mid: list[str] = []
-    mid.append("Income changes (in future $):")
+    mid.append("Income [magenta]changes[/magenta] (in FUTURE $):")
     mid.append(f"  Age {config.current_age}: {_money_whole(config.yearly_salary)}/yr (start)")
     if transition_ages:
         for p in summary.projections:
             if p.age in transition_ages:
                 if p.income == 0:
-                    desc = "fully retired"
+                    desc = "fully [cyan]retired[/cyan]"
                 else:
                     desc = f"salary \u2192 {_money_whole(p.income)}/yr"
                 mid.append(f"  Age {p.age}: {desc}")
