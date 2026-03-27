@@ -83,7 +83,7 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
                 _money_whole(p.income),
                 _money_whole(p.taxes),
                 _money_whole(p.net_income),
-                _money_whole(p.expenses),
+                _money_k(p.expenses),
                 _money_k(p.savings_contribution),
                 _money_k(p.investment_growth),
                 _money_whole(p.net_worth),
