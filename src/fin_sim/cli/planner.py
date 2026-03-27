@@ -24,6 +24,7 @@ def configure(
     annual_return_pct: float = typer.Option(7.0, prompt=True, help="Expected annual investment return %"),
     inflation_pct: float = typer.Option(3.0, prompt=True, help="Expected annual inflation %"),
     salary_growth_pct: float = typer.Option(3.0, prompt=True, help="Expected annual salary growth %"),
+    retirement_age: Optional[int] = typer.Option(None, help="Retirement age (0 = auto-retire at FIRE, omit = never)"),
 ) -> None:
     """Configure your wealth plan parameters."""
     config = PlannerConfig(
@@ -35,6 +36,7 @@ def configure(
         annual_return_pct=Decimal(str(annual_return_pct)),
         inflation_pct=Decimal(str(inflation_pct)),
         salary_growth_pct=Decimal(str(salary_growth_pct)),
+        retirement_age=retirement_age,
     )
     path = save_planner_config(config)
     console.print(f"[green]Config saved to {path}[/green]")

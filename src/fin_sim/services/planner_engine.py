@@ -5,6 +5,7 @@ from fin_sim.models.planner import PlannerConfig, PlanSummary, YearProjection
 from fin_sim.services.tax import calculate_total_tax
 
 TWO_PLACES = Decimal("0.01")
+ZERO = Decimal("0")
 
 
 def project(config: PlannerConfig) -> PlanSummary:
@@ -20,20 +21,39 @@ def project(config: PlannerConfig) -> PlanSummary:
 
     fire_age: int | None = None
     peak_net_worth = net_worth
+    retired = False
 
     years = config.life_expectancy - config.current_age
     for i in range(years + 1):
         age = config.current_age + i
         year = current_year + i
 
-        if i > 0:
+        if i > 0 and not retired:
             salary = (salary * (1 + salary_growth_rate)).quantize(TWO_PLACES, ROUND_HALF_UP)
-            expenses = (expenses * (1 + inflation_rate)).quantize(TWO_PLACES, ROUND_HALF_UP)
+        expenses = (
+            (expenses * (1 + inflation_rate)).quantize(TWO_PLACES, ROUND_HALF_UP)
+            if i > 0
+            else expenses
+        )
 
-        # Canadian federal + Ontario taxes, CPP, EI
-        # Tax brackets inflate with the configured inflation rate
-        taxes = calculate_total_tax(salary, years_from_base=i, inflation_rate=inflation_rate)
-        net_income = salary - taxes
+        # Check if retirement kicks in this year
+        if not retired:
+            if config.retirement_age is not None:
+                if config.retirement_age == 0:
+                    # Auto-retire at FIRE — check if we reached FIRE last year
+                    if fire_age is not None and age > fire_age:
+                        retired = True
+                elif age >= config.retirement_age:
+                    retired = True
+
+        if retired:
+            income = ZERO
+            taxes = ZERO
+            net_income = ZERO
+        else:
+            income = salary
+            taxes = calculate_total_tax(salary, years_from_base=i, inflation_rate=inflation_rate)
+            net_income = salary - taxes
 
         savings_contribution = net_income - expenses
         investment_growth = (net_worth * return_rate).quantize(TWO_PLACES, ROUND_HALF_UP)
@@ -52,7 +72,7 @@ def project(config: PlannerConfig) -> PlanSummary:
             YearProjection(
                 age=age,
                 year=year,
-                income=salary,
+                income=income,
                 taxes=taxes,
                 net_income=net_income,
                 expenses=expenses,

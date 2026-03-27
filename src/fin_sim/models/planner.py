@@ -12,6 +12,7 @@ class PlannerConfig(BaseModel):
     annual_return_pct: Decimal = Decimal("7.0")
     inflation_pct: Decimal = Decimal("3.0")
     salary_growth_pct: Decimal = Decimal("3.0")
+    retirement_age: int | None = None  # None = no retirement; 0 = retire at FIRE
 
 
 class YearProjection(BaseModel):

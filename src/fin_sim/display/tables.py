@@ -51,11 +51,25 @@ def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
     table.add_column("Growth", justify="right")
     table.add_column("Net Worth", justify="right")
 
+    # Find retirement year (first year with zero income after having income)
+    retirement_age: int | None = None
+    for j, p in enumerate(summary.projections):
+        if j > 0 and p.income == 0 and summary.projections[j - 1].income > 0:
+            retirement_age = p.age
+            break
+
     for i, p in enumerate(summary.projections):
-        # Show first year, last year, every Nth year, and FIRE year
         is_fire_year = summary.fire_age is not None and p.age == summary.fire_age
-        if i == 0 or i == len(summary.projections) - 1 or i % every_n == 0 or is_fire_year:
-            style = "bold yellow" if is_fire_year else None
+        is_retirement_year = retirement_age is not None and p.age == retirement_age
+        show = (i == 0 or i == len(summary.projections) - 1
+                or i % every_n == 0 or is_fire_year or is_retirement_year)
+        if show:
+            if is_retirement_year:
+                style = "bold cyan"
+            elif is_fire_year:
+                style = "bold yellow"
+            else:
+                style = None
             table.add_row(
                 str(p.age),
                 str(p.year),
@@ -78,6 +92,8 @@ def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
         lines.append(f"FIRE age (4% rule): {summary.fire_age}")
     else:
         lines.append("FIRE age: not reached")
+    if retirement_age is not None:
+        lines.append(f"Retirement age: {retirement_age}")
     console.print(Panel("\n".join(lines), title="Summary"))
 
 

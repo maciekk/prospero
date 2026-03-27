@@ -37,7 +37,9 @@ def save_planner_config(config: PlannerConfig) -> Path:
     # Write TOML manually (stdlib has reader but no writer)
     lines: list[str] = []
     for key, value in config.model_dump().items():
-        if isinstance(value, (int, float)):
+        if value is None:
+            continue  # omit None values; Pydantic will use defaults on load
+        elif isinstance(value, (int, float)):
             lines.append(f"{key} = {value}")
         else:
             lines.append(f'{key} = "{value}"')
