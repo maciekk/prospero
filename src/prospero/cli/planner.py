@@ -5,10 +5,10 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from fin_sim.models.planner import PlannerConfig
-from fin_sim.services.planner_engine import project
-from fin_sim.storage.store import load_planner_config, save_planner_config
-from fin_sim.display.tables import render_plan_summary
+from prospero.models.planner import PlannerConfig
+from prospero.services.planner_engine import project
+from prospero.storage.store import load_planner_config, save_planner_config
+from prospero.display.tables import render_plan_summary
 
 app = typer.Typer(help="Long-term wealth planner")
 console = Console()
@@ -60,7 +60,7 @@ def run(
     """Run the wealth projection and display results."""
     config = load_planner_config()
     if config is None:
-        console.print("[red]No planner config found. Run 'fin-sim plan configure' first.[/red]")
+        console.print("[red]No planner config found. Run 'prospero plan configure' first.[/red]")
         raise typer.Exit(1)
     summary = project(config)
     render_plan_summary(summary, every_n=every_n)
@@ -71,7 +71,7 @@ def show_config() -> None:
     """Show the current planner configuration."""
     config = load_planner_config()
     if config is None:
-        console.print("[red]No planner config found. Run 'fin-sim plan configure' first.[/red]")
+        console.print("[red]No planner config found. Run 'prospero plan configure' first.[/red]")
         raise typer.Exit(1)
     for key, value in config.model_dump().items():
         label = key.replace("_", " ").title()

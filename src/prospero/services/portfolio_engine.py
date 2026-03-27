@@ -1,6 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from fin_sim.models.portfolio import (
+from prospero.models.portfolio import (
     HoldingValuation,
     Portfolio,
     PortfolioSummary,

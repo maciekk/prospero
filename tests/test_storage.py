@@ -2,9 +2,9 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from fin_sim.models.planner import PlannerConfig
-from fin_sim.models.portfolio import Holding, Portfolio
-from fin_sim.storage import store
+from prospero.models.planner import PlannerConfig
+from prospero.models.portfolio import Holding, Portfolio
+from prospero.storage import store
 
 
 def test_planner_config_roundtrip(tmp_path: Path, monkeypatch):

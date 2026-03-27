@@ -1,8 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
-from fin_sim.models.portfolio import Holding, Portfolio
-from fin_sim.services.portfolio_engine import valuate
+from prospero.models.portfolio import Holding, Portfolio
+from prospero.services.portfolio_engine import valuate
 
 
 def _portfolio(*holdings: Holding) -> Portfolio:

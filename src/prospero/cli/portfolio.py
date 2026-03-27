@@ -5,11 +5,11 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from fin_sim.models.portfolio import Holding
-from fin_sim.services.market_data import get_current_prices, MarketDataError
-from fin_sim.services.portfolio_engine import valuate
-from fin_sim.storage.store import load_portfolio, save_portfolio
-from fin_sim.display.tables import render_holdings, render_portfolio_summary
+from prospero.models.portfolio import Holding
+from prospero.services.market_data import get_current_prices, MarketDataError
+from prospero.services.portfolio_engine import valuate
+from prospero.storage.store import load_portfolio, save_portfolio
+from prospero.display.tables import render_holdings, render_portfolio_summary
 
 app = typer.Typer(help="Stock portfolio tracker")
 console = Console()

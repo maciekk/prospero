@@ -5,8 +5,8 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
-from fin_sim.models.planner import PlanSummary
-from fin_sim.models.portfolio import PortfolioSummary, HoldingValuation, Portfolio
+from prospero.models.planner import PlanSummary
+from prospero.models.portfolio import PortfolioSummary, HoldingValuation, Portfolio
 
 console = Console()
 

@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from fin_sim.services.tax import (
+from prospero.services.tax import (
     calculate_total_tax,
     calculate_cpp,
     calculate_ei,

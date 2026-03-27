@@ -1,8 +1,8 @@
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
-from fin_sim.models.planner import PlannerConfig, PlanSummary, YearProjection
-from fin_sim.services.tax import calculate_total_tax
+from prospero.models.planner import PlannerConfig, PlanSummary, YearProjection
+from prospero.services.tax import calculate_total_tax
 
 TWO_PLACES = Decimal("0.01")
 ZERO = Decimal("0")

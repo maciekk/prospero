@@ -1,7 +1,7 @@
 from decimal import Decimal
 
-from fin_sim.models.planner import PlannerConfig
-from fin_sim.services.planner_engine import project
+from prospero.models.planner import PlannerConfig
+from prospero.services.planner_engine import project
 
 
 def _make_config(**overrides) -> PlannerConfig:

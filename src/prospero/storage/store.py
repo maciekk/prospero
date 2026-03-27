@@ -6,10 +6,10 @@ try:
 except ImportError:
     import tomli as tomllib  # type: ignore[no-redef]
 
-from fin_sim.models.planner import PlannerConfig
-from fin_sim.models.portfolio import Portfolio
+from prospero.models.planner import PlannerConfig
+from prospero.models.portfolio import Portfolio
 
-DATA_DIR = Path.home() / ".fin-sim"
+DATA_DIR = Path.home() / ".prospero"
 
 
 def _ensure_dir() -> None:
