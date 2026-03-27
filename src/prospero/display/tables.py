@@ -61,23 +61,18 @@ def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
     table.add_column("Growth", justify="right")
     table.add_column("Net Worth", justify="right")
 
-    # Find retirement year (first year with zero income after having income)
-    retirement_age: int | None = None
-    for j, p in enumerate(summary.projections):
-        if j > 0 and p.income == 0 and summary.projections[j - 1].income > 0:
-            retirement_age = p.age
-            break
+    transition_ages = set(summary.income_change_ages)
 
     for i, p in enumerate(summary.projections):
         is_fire_year = summary.fire_age is not None and p.age == summary.fire_age
-        is_retirement_year = retirement_age is not None and p.age == retirement_age
+        is_transition_year = p.age in transition_ages
         show = (i == 0 or i == len(summary.projections) - 1
-                or i % every_n == 0 or is_fire_year or is_retirement_year)
+                or i % every_n == 0 or is_fire_year or is_transition_year)
         if show:
-            if is_retirement_year:
-                style = "bold cyan"
-            elif is_fire_year:
+            if is_fire_year:
                 style = "bold yellow"
+            elif is_transition_year:
+                style = "bold cyan" if p.income == 0 else "bold magenta"
             else:
                 style = None
             table.add_row(
@@ -102,8 +97,18 @@ def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
         lines.append(f"FIRE age (4% rule): {summary.fire_age}")
     else:
         lines.append("FIRE age: not reached")
-    if retirement_age is not None:
-        lines.append(f"Retirement age: {retirement_age}")
+
+    if transition_ages:
+        lines.append("")
+        lines.append("Income changes:")
+        for p in summary.projections:
+            if p.age in transition_ages:
+                if p.income == 0:
+                    desc = "fully retired"
+                else:
+                    desc = f"salary \u2192 {_money_whole(p.income)}/yr"
+                lines.append(f"  Age {p.age}: {desc}")
+
     console.print(Panel("\n".join(lines), title="Summary"))
 
 

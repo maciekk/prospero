@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from prospero.models.planner import PlannerConfig
+from prospero.models.planner import IncomeChange, PlannerConfig
 from prospero.services.planner_engine import project
 
 
@@ -145,3 +145,121 @@ def test_retirement_draws_down_net_worth():
     age_80 = next(p for p in summary.projections if p.age == 80)
     # With low returns and no income, net worth should decrease
     assert age_80.net_worth < age_50.net_worth
+
+
+# --- Income changes tests ---
+
+def test_income_change_single_step_to_zero():
+    """A single IncomeChange to $0 at age 65 behaves like retirement_age=65."""
+    config = _make_config(income_changes=[IncomeChange(age=65, yearly_salary=Decimal("0"))])
+    summary = project(config)
+    age_64 = next(p for p in summary.projections if p.age == 64)
+    age_65 = next(p for p in summary.projections if p.age == 65)
+    assert age_64.income > 0
+    assert age_65.income == Decimal("0")
+    assert age_65.taxes == Decimal("0")
+    assert 65 in summary.income_change_ages
+
+
+def test_income_change_semi_retirement():
+    """Income change to a non-zero salary reduces income but doesn't zero taxes."""
+    config = _make_config(income_changes=[IncomeChange(age=55, yearly_salary=Decimal("80000"))])
+    summary = project(config)
+    age_55 = next(p for p in summary.projections if p.age == 55)
+    # Salary is hard-reset to 80k at age 55
+    assert age_55.income == Decimal("80000")
+    # Taxes still apply on 80k
+    assert age_55.taxes > Decimal("0")
+    assert 55 in summary.income_change_ages
+
+
+def test_income_change_multiple_transitions():
+    """Two changes: semi-retire at 55 to $60k, fully retire at 65."""
+    config = _make_config(
+        income_changes=[
+            IncomeChange(age=55, yearly_salary=Decimal("60000")),
+            IncomeChange(age=65, yearly_salary=Decimal("0")),
+        ]
+    )
+    summary = project(config)
+    age_55 = next(p for p in summary.projections if p.age == 55)
+    age_65 = next(p for p in summary.projections if p.age == 65)
+    assert age_55.income == Decimal("60000")
+    assert age_65.income == Decimal("0")
+    assert 55 in summary.income_change_ages
+    assert 65 in summary.income_change_ages
+
+
+def test_income_change_fire_sentinel():
+    """age=0 sentinel retires the year after FIRE is reached."""
+    config = _make_config(
+        current_savings=Decimal("500000"),
+        yearly_salary=Decimal("200000"),
+        yearly_expenses=Decimal("60000"),
+        income_changes=[IncomeChange(age=0, yearly_salary=Decimal("0"))],
+    )
+    summary = project(config)
+    assert summary.fire_age is not None
+    post_fire = [p for p in summary.projections if p.age > summary.fire_age]
+    assert len(post_fire) > 0
+    assert all(p.income == Decimal("0") for p in post_fire)
+
+
+def test_income_change_empty_no_retirement():
+    """Empty income_changes means income continues to life expectancy."""
+    config = _make_config(income_changes=[])
+    summary = project(config)
+    assert summary.projections[-1].income > 0
+    assert summary.income_change_ages == []
+
+
+def test_income_change_migration_from_retirement_age():
+    """retirement_age in raw data migrates to income_changes."""
+    raw = {
+        "current_age": 30, "life_expectancy": 90,
+        "current_savings": "100000", "yearly_salary": "150000",
+        "yearly_expenses": "80000", "retirement_age": 65,
+    }
+    config = PlannerConfig.model_validate(raw)
+    assert len(config.income_changes) == 1
+    assert config.income_changes[0].age == 65
+    assert config.income_changes[0].yearly_salary == Decimal("0")
+
+
+def test_income_change_migration_retirement_age_none():
+    """retirement_age=None migrates to empty income_changes."""
+    raw = {
+        "current_age": 30, "life_expectancy": 90,
+        "current_savings": "100000", "yearly_salary": "150000",
+        "yearly_expenses": "80000", "retirement_age": None,
+    }
+    config = PlannerConfig.model_validate(raw)
+    assert config.income_changes == []
+
+
+def test_income_change_migration_retirement_age_zero():
+    """retirement_age=0 migrates to FIRE sentinel income_change."""
+    raw = {
+        "current_age": 30, "life_expectancy": 90,
+        "current_savings": "100000", "yearly_salary": "150000",
+        "yearly_expenses": "80000", "retirement_age": 0,
+    }
+    config = PlannerConfig.model_validate(raw)
+    assert len(config.income_changes) == 1
+    assert config.income_changes[0].age == 0
+    assert config.income_changes[0].yearly_salary == Decimal("0")
+
+
+def test_income_change_return_to_work():
+    """Salary can go to zero then non-zero again (sabbatical / re-employment)."""
+    config = _make_config(
+        income_changes=[
+            IncomeChange(age=45, yearly_salary=Decimal("0")),
+            IncomeChange(age=50, yearly_salary=Decimal("100000")),
+        ]
+    )
+    summary = project(config)
+    age_47 = next(p for p in summary.projections if p.age == 47)
+    age_50 = next(p for p in summary.projections if p.age == 50)
+    assert age_47.income == Decimal("0")
+    assert age_50.income == Decimal("100000")

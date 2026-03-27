@@ -36,9 +36,21 @@ def save_planner_config(config: PlannerConfig) -> Path:
     path = _planner_path()
     # Write TOML manually (stdlib has reader but no writer)
     lines: list[str] = []
-    for key, value in config.model_dump().items():
+    for key, value in config.model_dump(mode='json').items():
         if value is None:
             continue  # omit None values; Pydantic will use defaults on load
+        elif isinstance(value, list):
+            if not value:
+                lines.append(f"{key} = []")
+            else:
+                items = []
+                for item in value:
+                    pairs = [
+                        f"{k} = {v}" if isinstance(v, (int, float)) else f'{k} = "{v}"'
+                        for k, v in item.items()
+                    ]
+                    items.append("{" + ", ".join(pairs) + "}")
+                lines.append(f"{key} = [{', '.join(items)}]")
         elif isinstance(value, (int, float)):
             lines.append(f"{key} = {value}")
         else:

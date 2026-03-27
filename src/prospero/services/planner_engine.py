@@ -21,32 +21,45 @@ def project(config: PlannerConfig) -> PlanSummary:
 
     fire_age: int | None = None
     peak_net_worth = net_worth
-    retired = False
+
+    # Pre-process income changes into age-triggered and FIRE-triggered buckets
+    age_triggered = sorted(
+        [c for c in config.income_changes if c.age != 0],
+        key=lambda c: c.age,
+    )
+    fire_triggered = [c for c in config.income_changes if c.age == 0]
+    age_idx = 0
+    fire_applied = False
+    resolved_change_ages: list[int] = []
 
     years = config.life_expectancy - config.current_age
     for i in range(years + 1):
         age = config.current_age + i
         year = current_year + i
 
-        if i > 0 and not retired:
+        # Apply annual salary growth, then override if an income change fires
+        if i > 0:
             salary = (salary * (1 + salary_growth_rate)).quantize(TWO_PLACES, ROUND_HALF_UP)
+
         expenses = (
             (expenses * (1 + inflation_rate)).quantize(TWO_PLACES, ROUND_HALF_UP)
             if i > 0
             else expenses
         )
 
-        # Check if retirement kicks in this year
-        if not retired:
-            if config.retirement_age is not None:
-                if config.retirement_age == 0:
-                    # Auto-retire at FIRE — check if we reached FIRE last year
-                    if fire_age is not None and age > fire_age:
-                        retired = True
-                elif age >= config.retirement_age:
-                    retired = True
+        # Apply age-triggered income changes
+        while age_idx < len(age_triggered) and age >= age_triggered[age_idx].age:
+            salary = age_triggered[age_idx].yearly_salary
+            resolved_change_ages.append(age_triggered[age_idx].age)
+            age_idx += 1
 
-        if retired:
+        # Apply FIRE-triggered income changes (year after FIRE is reached)
+        if fire_triggered and not fire_applied and fire_age is not None and age > fire_age:
+            salary = fire_triggered[-1].yearly_salary
+            resolved_change_ages.append(age)
+            fire_applied = True
+
+        if salary == ZERO:
             income = ZERO
             taxes = ZERO
             net_income = ZERO
@@ -87,4 +100,5 @@ def project(config: PlannerConfig) -> PlanSummary:
         fire_age=fire_age,
         peak_net_worth=peak_net_worth.quantize(TWO_PLACES, ROUND_HALF_UP),
         final_net_worth=net_worth.quantize(TWO_PLACES, ROUND_HALF_UP),
+        income_change_ages=resolved_change_ages,
     )
