@@ -5,7 +5,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
-from prospero.models.planner import PlanSummary
+from prospero.models.planner import PlannerConfig, PlanSummary
 from prospero.models.portfolio import PortfolioSummary, HoldingValuation, Portfolio
 
 console = Console()
@@ -49,17 +49,19 @@ def _colored_pct(value: Decimal) -> Text:
 
 # --- Planner ---
 
-def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
-    table = Table(title="Wealth Projection (ON, Canada)", show_lines=False)
-    table.add_column("Age", justify="right")
-    table.add_column("Year", justify="right")
-    table.add_column("Gross", justify="right")
-    table.add_column("Tax", justify="right")
-    table.add_column("Net Inc", justify="right")
-    table.add_column("Expenses", justify="right")
-    table.add_column("Saved", justify="right")
-    table.add_column("Growth", justify="right")
-    table.add_column("Net Worth", justify="right")
+def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: int = 5) -> None:
+    # expand=True fills terminal width; ratio values are proportional to typical content
+    # width so the surplus space lands where columns naturally need it most.
+    table = Table(title="Wealth Projection (ON, Canada)", show_lines=False, expand=True)
+    table.add_column("Age",       justify="right", ratio=3)
+    table.add_column("Year",      justify="right", ratio=4)
+    table.add_column("Gross",     justify="right", ratio=8)
+    table.add_column("Tax",       justify="right", ratio=8)
+    table.add_column("Net Inc",   justify="right", ratio=9)
+    table.add_column("Expenses",  justify="right", ratio=9)
+    table.add_column("Saved",     justify="right", ratio=6)
+    table.add_column("Growth",    justify="right", ratio=7)
+    table.add_column("Net Worth", justify="right", ratio=11)
 
     transition_ages = set(summary.income_change_ages)
 
@@ -90,26 +92,50 @@ def render_plan_summary(summary: PlanSummary, every_n: int = 5) -> None:
 
     console.print(table)
 
-    # Summary panel
-    lines = [f"Peak net worth: {_money_whole(summary.peak_net_worth)}"]
-    lines.append(f"Final net worth: {_money_whole(summary.final_net_worth)}")
+    # Summary panel — three columns: outcomes | income changes | key assumptions
+    left: list[str] = []
+    left.append(f"Peak net worth:     {_money_whole(summary.peak_net_worth)}")
+    left.append(f"Final net worth:    {_money_whole(summary.final_net_worth)}")
     if summary.fire_age is not None:
-        lines.append(f"FIRE age (4% rule): {summary.fire_age}")
+        left.append(f"FIRE age (4% rule): {summary.fire_age}")
     else:
-        lines.append("FIRE age: not reached")
+        left.append("FIRE age:           not reached")
 
+    mid: list[str] = []
     if transition_ages:
-        lines.append("")
-        lines.append("Income changes:")
+        mid.append("Income changes:")
         for p in summary.projections:
             if p.age in transition_ages:
                 if p.income == 0:
                     desc = "fully retired"
                 else:
                     desc = f"salary \u2192 {_money_whole(p.income)}/yr"
-                lines.append(f"  Age {p.age}: {desc}")
+                mid.append(f"  Age {p.age}: {desc}")
 
-    console.print(Panel("\n".join(lines), title="Summary"))
+    def _pct1(v: Decimal) -> str:
+        return f"{v:.1f}%"
+
+    right: list[str] = []
+    right.append("Key assumptions:")
+    right.append(f"  Annual return:   {_pct1(config.annual_return_pct)}")
+    right.append(f"  Inflation:       {_pct1(config.inflation_pct)}")
+    right.append(f"  Salary growth:   {_pct1(config.salary_growth_pct)}")
+    right.append(f"  Life expectancy: {config.life_expectancy}")
+
+    # Pad all columns to equal height
+    height = max(len(left), len(mid), len(right))
+    left  += [""] * (height - len(left))
+    mid   += [""] * (height - len(mid))
+    right += [""] * (height - len(right))
+
+    grid = Table.grid(padding=(0, 4), expand=True)
+    grid.add_column()
+    grid.add_column()
+    grid.add_column()
+    for l, m, r in zip(left, mid, right):
+        grid.add_row(l, m, r)
+
+    console.print(Panel(grid, title="Summary"))
 
 
 # --- Portfolio ---

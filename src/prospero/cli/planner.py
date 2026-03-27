@@ -93,7 +93,7 @@ def run(
         console.print("[red]No planner config found. Run 'prospero plan configure' first.[/red]")
         raise typer.Exit(1)
     summary = project(config)
-    render_plan_summary(summary, every_n=every_n)
+    render_plan_summary(summary, config, every_n=every_n)
 
 
 @app.command("show-config")
