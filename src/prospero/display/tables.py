@@ -102,7 +102,7 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
         left.append("FIRE age:           not reached")
 
     mid: list[str] = []
-    mid.append("Income changes:")
+    mid.append("Income changes (in future $):")
     mid.append(f"  Age {config.current_age}: {_money_whole(config.yearly_salary)}/yr (start)")
     if transition_ages:
         for p in summary.projections:

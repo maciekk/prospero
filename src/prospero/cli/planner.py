@@ -44,7 +44,7 @@ def configure(
     income_change: Optional[list[str]] = typer.Option(
         None,
         "--income-change",
-        help="Income change as AGE:SALARY (repeatable). Age 0 = retire at FIRE. e.g. --income-change 55:80000 --income-change 65:0",
+        help="Income change as AGE:SALARY in today's dollars (repeatable). Age 0 = retire at FIRE. e.g. --income-change 55:80000 --income-change 65:0",
     ),
 ) -> None:
     """Configure your wealth plan parameters."""
@@ -113,7 +113,7 @@ def show_config() -> None:
                 for ic in value:
                     age_label = "At FIRE" if ic["age"] == 0 else f"Age {ic['age']}"
                     sal = Decimal(str(ic["yearly_salary"]))
-                    status = "fully retire" if sal == 0 else f"salary \u2192 ${sal:,.0f}/yr"
+                    status = "fully retire" if sal == 0 else f"salary \u2192 ${sal:,.0f}/yr (today's $)"
                     console.print(f"    {age_label}: {status}")
         else:
             console.print(f"  {label}: {value}")

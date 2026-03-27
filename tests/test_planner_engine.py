@@ -162,13 +162,14 @@ def test_income_change_single_step_to_zero():
 
 
 def test_income_change_semi_retirement():
-    """Income change to a non-zero salary reduces income but doesn't zero taxes."""
+    """Income change salary is inflated from today's dollars to nominal at transition year."""
     config = _make_config(income_changes=[IncomeChange(age=55, yearly_salary=Decimal("80000"))])
     summary = project(config)
     age_55 = next(p for p in summary.projections if p.age == 55)
-    # Salary is hard-reset to 80k at age 55
-    assert age_55.income == Decimal("80000")
-    # Taxes still apply on 80k
+    # 80k in today's dollars, inflated 25 years at 3% → ~80000 * 1.03^25
+    expected = Decimal("80000") * (Decimal("1.03") ** 25)
+    assert abs(age_55.income - expected) < Decimal("1")
+    # Taxes still apply
     assert age_55.taxes > Decimal("0")
     assert 55 in summary.income_change_ages
 
@@ -184,7 +185,8 @@ def test_income_change_multiple_transitions():
     summary = project(config)
     age_55 = next(p for p in summary.projections if p.age == 55)
     age_65 = next(p for p in summary.projections if p.age == 65)
-    assert age_55.income == Decimal("60000")
+    # 60k in today's dollars, inflated 25 years at 3%
+    assert age_55.income > Decimal("60000")
     assert age_65.income == Decimal("0")
     assert 55 in summary.income_change_ages
     assert 65 in summary.income_change_ages
@@ -262,4 +264,5 @@ def test_income_change_return_to_work():
     age_47 = next(p for p in summary.projections if p.age == 47)
     age_50 = next(p for p in summary.projections if p.age == 50)
     assert age_47.income == Decimal("0")
-    assert age_50.income == Decimal("100000")
+    # 100k in today's dollars, inflated 20 years at 3%
+    assert age_50.income > Decimal("100000")

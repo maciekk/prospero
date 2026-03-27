@@ -47,15 +47,21 @@ def project(config: PlannerConfig) -> PlanSummary:
             else expenses
         )
 
-        # Apply age-triggered income changes
+        # Apply age-triggered income changes.
+        # Salaries are specified in today's dollars; inflate to nominal value at transition year.
         while age_idx < len(age_triggered) and age >= age_triggered[age_idx].age:
-            salary = age_triggered[age_idx].yearly_salary
+            years_from_now = age_triggered[age_idx].age - config.current_age
+            inflation_factor = (1 + inflation_rate) ** years_from_now
+            salary = (age_triggered[age_idx].yearly_salary * inflation_factor).quantize(TWO_PLACES, ROUND_HALF_UP)
             resolved_change_ages.append(age_triggered[age_idx].age)
             age_idx += 1
 
-        # Apply FIRE-triggered income changes (year after FIRE is reached)
+        # Apply FIRE-triggered income changes (year after FIRE is reached).
+        # Inflate by years elapsed to the actual trigger year.
         if fire_triggered and not fire_applied and fire_age is not None and age > fire_age:
-            salary = fire_triggered[-1].yearly_salary
+            years_from_now = age - config.current_age
+            inflation_factor = (1 + inflation_rate) ** years_from_now
+            salary = (fire_triggered[-1].yearly_salary * inflation_factor).quantize(TWO_PLACES, ROUND_HALF_UP)
             resolved_change_ages.append(age)
             fire_applied = True
 
