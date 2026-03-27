@@ -3,7 +3,7 @@
 Financial simulation CLI — portfolio tracker and long-term wealth planner with Canadian (Ontario) tax support.
 
 <details>
-<summary>Disclaimer</summary>
+<summary>**Disclaimer**</summary>
 
 <small><i>This tool is for educational and illustrative purposes only. All projections and calculations are simplified simulations based on assumptions you provide; they are not predictions of future results. Nothing produced by this tool constitutes financial, tax, or investment advice. Consult a qualified financial advisor before making financial decisions.</i></small>
 </details>
