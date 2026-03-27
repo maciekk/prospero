@@ -58,7 +58,7 @@ def render_plan_summary(summary: PlanSummary, config: PlannerConfig, every_n: in
     table.add_column("Gross",     justify="right", ratio=8)
     table.add_column("Tax",       justify="right", ratio=8)
     table.add_column("Net Inc",   justify="right", ratio=9)
-    table.add_column("Expenses",  justify="right", ratio=9)
+    table.add_column("Expenses",  justify="right", ratio=7)
     table.add_column("Saved",     justify="right", ratio=6)
     table.add_column("Growth",    justify="right", ratio=7)
     table.add_column("Net Worth", justify="right", ratio=11)
