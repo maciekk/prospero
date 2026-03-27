@@ -4,7 +4,8 @@ Financial simulation CLI — portfolio tracker and long-term wealth planner with
 
 <details>
 <summary>Disclaimer</summary>
-This tool is for educational and illustrative purposes only. All projections and calculations are simplified simulations based on assumptions you provide; they are not predictions of future results. Nothing produced by this tool constitutes financial, tax, or investment advice. Consult a qualified financial advisor before making financial decisions.
+
+<small><i>This tool is for educational and illustrative purposes only. All projections and calculations are simplified simulations based on assumptions you provide; they are not predictions of future results. Nothing produced by this tool constitutes financial, tax, or investment advice. Consult a qualified financial advisor before making financial decisions.</i></small>
 </details>
 
 <img src="screenshot-configure.png" width="69%">
