@@ -21,23 +21,29 @@ def _parse_dollars(value: str) -> Decimal:
 
 @app.command()
 def configure(
-    current_age: int = typer.Option(..., prompt=True, help="Your current age"),
-    life_expectancy: int = typer.Option(90, prompt=True, help="Estimated life expectancy"),
-    current_savings: str = typer.Option("0", prompt=True, help="Current total savings/investments"),
-    yearly_salary: str = typer.Option(..., prompt=True, help="Current yearly salary/compensation"),
-    yearly_expenses: str = typer.Option(..., prompt=True, help="Estimated yearly expenses"),
-    annual_return_pct: float = typer.Option(7.0, prompt=True, help="Expected annual investment return %"),
-    inflation_pct: float = typer.Option(3.0, prompt=True, help="Expected annual inflation %"),
-    salary_growth_pct: float = typer.Option(3.0, prompt=True, help="Expected annual salary growth %"),
     retirement_age: Optional[int] = typer.Option(None, help="Retirement age (0 = auto-retire at FIRE, omit = never)"),
 ) -> None:
     """Configure your wealth plan parameters."""
+    existing = load_planner_config()
+    e = existing  # shorthand
+
+    current_age = typer.prompt("Current age", default=e.current_age if e else ...)
+    life_expectancy = typer.prompt("Life expectancy", default=e.life_expectancy if e else 90)
+    current_savings = typer.prompt("Current savings/investments", default=str(e.current_savings) if e else "0")
+    yearly_salary = typer.prompt("Yearly salary/compensation", default=str(e.yearly_salary) if e else ...)
+    yearly_expenses = typer.prompt("Yearly expenses", default=str(e.yearly_expenses) if e else ...)
+    annual_return_pct = typer.prompt("Annual investment return %", default=float(e.annual_return_pct) if e else 7.0)
+    inflation_pct = typer.prompt("Annual inflation %", default=float(e.inflation_pct) if e else 3.0)
+    salary_growth_pct = typer.prompt("Annual salary growth %", default=float(e.salary_growth_pct) if e else 3.0)
+    if retirement_age is None and e is not None:
+        retirement_age = e.retirement_age
+
     config = PlannerConfig(
         current_age=current_age,
         life_expectancy=life_expectancy,
-        current_savings=_parse_dollars(current_savings),
-        yearly_salary=_parse_dollars(yearly_salary),
-        yearly_expenses=_parse_dollars(yearly_expenses),
+        current_savings=_parse_dollars(str(current_savings)),
+        yearly_salary=_parse_dollars(str(yearly_salary)),
+        yearly_expenses=_parse_dollars(str(yearly_expenses)),
         annual_return_pct=Decimal(str(annual_return_pct)),
         inflation_pct=Decimal(str(inflation_pct)),
         salary_growth_pct=Decimal(str(salary_growth_pct)),
