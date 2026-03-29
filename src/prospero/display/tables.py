@@ -13,18 +13,29 @@ from prospero.services.tax import TaxBreakdown
 console = Console()
 
 
+def _signed(magnitude: str, value: Decimal) -> str:
+    """Wrap magnitude string in parentheses for negative values, return as-is for positive.
+
+    This is the single place to switch between accounting notation — ($100) — and
+    sign notation — -$100. To switch, replace the two return statements here.
+    """
+    if value < 0:
+        return f"({magnitude})"
+    return magnitude
+
+
 def _money(value: Decimal) -> str:
-    return f"${value:,.2f}"
+    return _signed(f"${abs(value):,.2f}", value)
 
 
 def _money_whole(value: Decimal) -> str:
-    return f"${value:,.0f}"
+    return _signed(f"${abs(value):,.0f}", value)
 
 
 def _money_k(value: Decimal) -> str:
     """Format as $XXK (thousands), rounded to nearest thousand."""
-    thousands = int(value / 1000)
-    return f"${thousands:,}K"
+    thousands = abs(int(value / 1000))
+    return _signed(f"${thousands:,}K", value)
 
 
 def _pct(value: Decimal) -> str:
@@ -34,7 +45,7 @@ def _pct(value: Decimal) -> str:
 def _colored_money(value: Decimal) -> Text:
     text = _money(value)
     if value > 0:
-        return Text(f"+{text}", style="green")
+        return Text(text, style="green")
     elif value < 0:
         return Text(text, style="red")
     return Text(text)
@@ -276,7 +287,7 @@ def render_capital_gains_report(
     table = Table(title=f"Capital Gains / Losses — {year}", expand=False)
     table.add_column("Date")
     table.add_column("Ticker")
-    table.add_column("Shares Sold", justify="right")
+    table.add_column("Shares Sold", justify="right", max_width=8)
     table.add_column("Proceeds (USD)", justify="right")
     table.add_column("ACB Used (USD)", justify="right")
     table.add_column("Gain / Loss (USD)", justify="right")
