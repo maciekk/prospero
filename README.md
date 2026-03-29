@@ -61,6 +61,27 @@ prospero plan run --every 1
 prospero plan show-config
 ```
 
+#### Income Changes
+
+Use `--income-change AGE:SALARY` (repeatable) to model salary transitions at any age:
+
+- `--income-change 65:0` — fully retire at 65
+- `--income-change 55:80000 --income-change 65:0` — semi-retire at 55 to $80K, fully retire at 65
+- `--income-change 0:0` — auto-retire the year after reaching FIRE (age `0` is the FIRE sentinel)
+- Omit entirely — work indefinitely at the configured salary
+
+Each new salary is a hard reset at that age; the global `salary_growth_pct` then applies from there forward.
+
+#### Tax Support
+
+The wealth planner calculates taxes using 2025 Canadian federal + Ontario provincial rates:
+
+- Federal progressive income tax brackets
+- Ontario progressive brackets + Ontario surtax
+- CPP/CPP2 employee contributions
+- EI premiums
+- Bracket indexation to inflation over time
+
 ### Tax Breakdown
 
 ```bash
@@ -135,27 +156,6 @@ The report shows proceeds, ACB used, and capital gain/loss per sale, with the 50
 Data is stored in `~/.prospero/acb_ledger.json`. Broker CSVs vary — massage your export to match the format above.
 
 *For reference only — not professional tax advice.*
-
-### Tax Support
-
-The wealth planner calculates taxes using 2025 Canadian federal + Ontario provincial rates:
-
-- Federal progressive income tax brackets
-- Ontario progressive brackets + Ontario surtax
-- CPP/CPP2 employee contributions
-- EI premiums
-- Bracket indexation to inflation over time
-
-### Income Changes
-
-Use `--income-change AGE:SALARY` (repeatable) to model salary transitions at any age:
-
-- `--income-change 65:0` — fully retire at 65
-- `--income-change 55:80000 --income-change 65:0` — semi-retire at 55 to $80K, fully retire at 65
-- `--income-change 0:0` — auto-retire the year after reaching FIRE (age `0` is the FIRE sentinel)
-- Omit entirely — work indefinitely at the configured salary
-
-Each new salary is a hard reset at that age; the global `salary_growth_pct` then applies from there forward.
 
 ## Data Storage
 
