@@ -2,9 +2,10 @@
 
 ## Project Overview
 
-**Prospero** is a financial simulation CLI for portfolio tracking and long-term wealth planning with Canadian (Ontario) tax support. Two main features:
+**Prospero** is a financial simulation CLI for portfolio tracking and long-term wealth planning with Canadian (Ontario) tax support. Three main features:
 - **Portfolio tracker** — add/remove holdings, fetch live prices, show gains/losses
 - **Wealth planner** — project net worth year-by-year with salary changes, retirement, FIRE detection, and taxes
+- **ACB tracker** — compute Adjusted Cost Basis and capital gains/losses for Canadian tax filing
 
 ## Project Structure
 
@@ -12,21 +13,27 @@
 src/prospero/
 ├── cli/
 │   ├── app.py          Root Typer app — wires subapps, hosts top-level commands (e.g. tax-breakdown)
+│   ├── acb.py          ACB tracker commands (import, add-vest, add-buy, add-sell, show, report)
 │   ├── planner.py      Wealth planner commands (configure, run, show-config)
 │   └── portfolio.py    Portfolio commands (add, remove, show, value)
 ├── models/
+│   ├── acb.py          StockTransaction, TransactionLedger, AcbPoolEntry, CapitalGainEntry
 │   ├── planner.py      PlannerConfig, IncomeChange, YearProjection, PlanSummary
 │   └── portfolio.py    Holding, Portfolio, HoldingValuation, PortfolioSummary
 ├── services/
+│   ├── acb_engine.py       compute_acb_pools(), compute_capital_gains(), acb_report()
+│   ├── acb_csv.py          parse_csv() — validates and parses the ACB CSV format
 │   ├── planner_engine.py   project() — runs the year-by-year simulation
 │   ├── portfolio_engine.py valuate() — computes current market value / gains
 │   └── tax.py              calculate_tax_breakdown(), calculate_total_tax(), TaxBreakdown
 ├── storage/
-│   └── store.py        load/save for planner (TOML) and portfolio (JSON)
+│   └── store.py        load/save for planner (TOML), portfolio (JSON), and ACB ledger (JSON)
 └── display/
     └── tables.py       Rich table rendering for all output
 
 tests/
+├── test_acb_engine.py      ACB pool maintenance, capital gains/losses, cross-year accuracy
+├── test_acb_csv.py         CSV parsing, error collection, edge cases
 ├── test_planner_engine.py  Most comprehensive — covers income changes, FIRE, draw-down
 ├── test_tax.py             Bracket tests, CPP/EI caps, bracket inflation
 ├── test_portfolio_engine.py Gains/losses, totals
@@ -36,6 +43,7 @@ tests/
 Data is stored in `~/.prospero/`:
 - `planner.toml` — human-editable planner config
 - `portfolio.json` — stock holdings
+- `acb_ledger.json` — ACB transaction history
 
 ## Architecture
 
@@ -82,6 +90,18 @@ def my_command(...) -> None:
 **Backward compatibility.** Old config files used `retirement_age` (single value). A Pydantic `@model_validator(mode='before')` in `PlannerConfig` auto-migrates to the new `income_changes` list on load.
 
 **Display filtering.** The projection table shows every Nth year (`--every N`, default 5), but always includes the first year, last year, FIRE year, and any income-change transition years.
+
+## ACB Feature
+
+Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker pool together. The pool state is (`total_shares`, `total_acb`); `acb_per_share = total_acb / total_shares` at any point.
+
+**Why `acb_engine.py` replays all history for every call.** To compute the correct ACB at the moment of any sale, we must know all prior acquisitions *and* dispositions, even from earlier tax years. For example, a 2023 partial sell reduces the pool before the 2024 sell computes its ACB. `compute_capital_gains(transactions, year)` replays everything and only *emits* entries for the requested year — it does not skip prior-year events.
+
+**RSU vest ACB = FMV at vest.** When shares vest, CRA includes the FMV as employment income on your T4. This means the ACB equals FMV — there is no additional gain to recognise at vesting, only appreciation after vesting becomes a capital gain on eventual sale.
+
+**CSV format** (`services/acb_csv.py`): `date,type,ticker,quantity,price`. Validation collects all row errors before raising so users see the complete list of problems in one pass. Accepts UTF-8 BOM (common in Excel exports). Column names are whitespace- and case-normalised.
+
+**50% inclusion rate** is hardcoded as `Decimal("0.50")` in `acb_engine.py`. If CRA changes this rate (Budget 2024 proposed 2/3 for gains over $250k — not yet law), update `_INCLUSION_RATE` there.
 
 ## Running the Project
 

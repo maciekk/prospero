@@ -3,7 +3,7 @@ from typing import Optional
 
 import typer
 
-from prospero.cli import planner, portfolio
+from prospero.cli import acb, planner, portfolio
 from prospero.services.tax import calculate_tax_breakdown
 from prospero.storage.store import load_planner_config
 from prospero.display.tables import render_tax_breakdown
@@ -12,6 +12,7 @@ app = typer.Typer(
     name="prospero",
     help="Portfolio tracker and wealth planner",
 )
+app.add_typer(acb.app, name="acb", help="ACB tracker for Canadian capital gains tax")
 app.add_typer(planner.app, name="plan", help="Long-term wealth planner")
 app.add_typer(portfolio.app, name="portfolio", help="Stock portfolio tracker")
 

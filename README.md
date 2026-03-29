@@ -73,6 +73,69 @@ prospero tax-breakdown
 
 Breaks down federal income tax, Ontario income tax (including surtax), CPP1, CPP2, and EI — showing the amount and percentage of gross for each component.
 
+### ACB Tracker
+
+Track Adjusted Cost Basis for Canadian stock grants (RSUs) and compute capital gains/losses for tax filing.
+
+**Background:** When RSUs vest, CRA treats the fair market value (FMV) at vest as employment income — it appears on your T4. This means the ACB of your vested shares equals the FMV at vest. When you sell, only the appreciation *after* vesting is a capital gain. Canada uses the **identical-shares average cost method**: all shares of the same ticker form one ACB pool, and the per-share ACB is always `total_acb / total_shares`.
+
+#### CSV Import (primary workflow)
+
+Prepare a CSV from your broker's transaction history with these columns:
+
+```
+date,type,ticker,quantity,price
+2024-01-15,vest,AAPL,25,185.50
+2024-03-01,buy,AAPL,10,190.00
+2024-06-15,sell,AAPL,20,210.00
+```
+
+| Column | Format | Notes |
+|---|---|---|
+| `date` | YYYY-MM-DD | Transaction date |
+| `type` | `vest` / `buy` / `sell` | Case-insensitive |
+| `ticker` | e.g. `AAPL` | Uppercased automatically |
+| `quantity` | positive number | Shares involved |
+| `price` | price per share | FMV for vest; purchase price for buy; proceeds for sell |
+
+```bash
+# Preview without saving
+prospero acb import --file transactions.csv --dry-run
+
+# Import (validates all rows before writing — reports every error at once)
+prospero acb import --file transactions.csv
+```
+
+#### Manual entry
+
+```bash
+# Record an RSU vesting event (FMV at vest = ACB)
+prospero acb add-vest --ticker AAPL --date 2024-01-15 --quantity 25 --fmv 185.50
+
+# Record a regular market purchase
+prospero acb add-buy --ticker AAPL --date 2024-03-01 --quantity 10 --price 190.00
+
+# Record a sale
+prospero acb add-sell --ticker AAPL --date 2024-06-15 --quantity 20 --price 210.00
+```
+
+#### Reporting
+
+```bash
+# Show current ACB pools (remaining shares and average cost per ticker)
+prospero acb show
+
+# Capital gains/losses for a tax year (defaults to the previous calendar year)
+prospero acb report
+prospero acb report --year 2024
+```
+
+The report shows proceeds, ACB used, and capital gain/loss per sale, with the 50% inclusion amount (the portion added to taxable income). It also notes the superficial loss rule and capital loss carryover rules.
+
+Data is stored in `~/.prospero/acb_ledger.json`. Broker CSVs vary — massage your export to match the format above.
+
+*For reference only — not professional tax advice.*
+
 ### Tax Support
 
 The wealth planner calculates taxes using 2025 Canadian federal + Ontario provincial rates:
@@ -99,6 +162,7 @@ Each new salary is a hard reset at that age; the global `salary_growth_pct` then
 Portfolio and planner config are stored in `~/.prospero/`:
 - `portfolio.json` — stock holdings
 - `planner.toml` — planner configuration
+- `acb_ledger.json` — ACB transaction history
 
 ## Tests
 

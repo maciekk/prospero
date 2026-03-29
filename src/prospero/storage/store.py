@@ -6,6 +6,7 @@ try:
 except ImportError:
     import tomli as tomllib  # type: ignore[no-redef]
 
+from prospero.models.acb import TransactionLedger
 from prospero.models.planner import PlannerConfig
 from prospero.models.portfolio import Portfolio
 
@@ -77,4 +78,24 @@ def save_portfolio(portfolio: Portfolio) -> Path:
     _ensure_dir()
     path = _portfolio_path()
     path.write_text(portfolio.model_dump_json(indent=2) + "\n")
+    return path
+
+
+# --- ACB ledger (JSON) ---
+
+def _acb_path() -> Path:
+    return DATA_DIR / "acb_ledger.json"
+
+
+def load_acb_ledger() -> TransactionLedger:
+    path = _acb_path()
+    if not path.exists():
+        return TransactionLedger()
+    return TransactionLedger.model_validate_json(path.read_text())
+
+
+def save_acb_ledger(ledger: TransactionLedger) -> Path:
+    _ensure_dir()
+    path = _acb_path()
+    path.write_text(ledger.model_dump_json(indent=2) + "\n")
     return path

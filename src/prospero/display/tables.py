@@ -5,6 +5,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
+from prospero.models.acb import AcbPoolEntry, CapitalGainEntry
 from prospero.models.planner import PlannerConfig, PlanSummary
 from prospero.models.portfolio import PortfolioSummary, HoldingValuation, Portfolio
 from prospero.services.tax import TaxBreakdown
@@ -231,4 +232,82 @@ def render_portfolio_summary(summary: PortfolioSummary) -> None:
         f"Total market value: {_money(summary.total_market_value)}\n"
         f"Total gain/loss:    {_money(summary.total_gain_loss)} ({_pct(summary.total_gain_loss_pct)})",
         title="Portfolio Summary",
+    ))
+
+
+def render_acb_pools(pools: dict[str, AcbPoolEntry]) -> None:
+    """Render a table of current ACB pools — one row per ticker with remaining shares."""
+    table = Table(title="Current ACB Pools", expand=False)
+    table.add_column("Ticker")
+    table.add_column("Shares", justify="right")
+    table.add_column("ACB / Share", justify="right")
+    table.add_column("Total ACB", justify="right")
+
+    for entry in sorted(pools.values(), key=lambda e: e.ticker):
+        table.add_row(
+            entry.ticker,
+            str(entry.shares),
+            _money(entry.acb_per_share),
+            _money(entry.total_acb),
+        )
+
+    console.print(table)
+
+
+def render_capital_gains_report(
+    gains: list[CapitalGainEntry],
+    year: int,
+    total_taxable: Decimal,
+) -> None:
+    """
+    Render a capital gains/losses report for a tax year.
+
+    Shows one row per disposition, coloured green (gain) or red (loss), followed by
+    a summary panel with totals and Canadian tax notes.
+    """
+    if not gains:
+        console.print(f"[dim]No dispositions recorded for {year}.[/dim]")
+        return
+
+    table = Table(title=f"Capital Gains / Losses — {year}", expand=False)
+    table.add_column("Date")
+    table.add_column("Ticker")
+    table.add_column("Shares Sold", justify="right")
+    table.add_column("Proceeds", justify="right")
+    table.add_column("ACB Used", justify="right")
+    table.add_column("Gain / Loss", justify="right")
+    table.add_column("Taxable (50%)", justify="right")
+
+    for g in sorted(gains, key=lambda e: e.date):
+        table.add_row(
+            str(g.date),
+            g.ticker,
+            str(g.shares_sold),
+            _money(g.proceeds),
+            _money(g.acb_used),
+            _colored_money(g.capital_gain),
+            _colored_money(g.taxable_gain),
+        )
+
+    console.print(table)
+    console.print()
+
+    total_gain = sum((g.capital_gain for g in gains), Decimal("0"))
+    summary_color = "green" if total_gain >= 0 else "red"
+
+    lines = [
+        f"Total capital gain / loss:  {_money(total_gain)}",
+        f"Taxable amount (50%):       {_money(total_taxable)}",
+        "",
+        "[dim]The 50% inclusion rate applies to net capital gains for 2024.[/dim]",
+        "[dim]Capital losses can offset gains in the same year, be carried back[/dim]",
+        "[dim]3 years (T1A), or carried forward indefinitely.[/dim]",
+        "[dim]Superficial loss rule: a loss may be denied if you repurchase the[/dim]",
+        "[dim]same security within 30 days before or after the sale.[/dim]",
+        "[dim italic]For reference only — not professional tax advice.[/dim italic]",
+    ]
+
+    console.print(Panel(
+        "\n".join(lines),
+        title=f"[{summary_color}]Tax Year {year} Summary (Canada — ON)[/{summary_color}]",
     ))
