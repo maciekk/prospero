@@ -22,6 +22,16 @@ from prospero.services.acb_engine import compute_acb_pools, compute_capital_gain
 # ---------------------------------------------------------------------------
 
 
+def opening(ticker: str, dt: str, shares: str, acb_per_share: str) -> StockTransaction:
+    return StockTransaction(
+        ticker=ticker,
+        transaction_type=TransactionType.OPENING,
+        date=date.fromisoformat(dt),
+        quantity=Decimal(shares),
+        price_per_share=Decimal(acb_per_share),
+    )
+
+
 def vest(ticker: str, dt: str, qty: str, fmv: str) -> StockTransaction:
     return StockTransaction(
         ticker=ticker,
@@ -55,6 +65,41 @@ def sell(ticker: str, dt: str, qty: str, price: str) -> StockTransaction:
 # ---------------------------------------------------------------------------
 # compute_acb_pools — pool maintenance
 # ---------------------------------------------------------------------------
+
+
+def test_opening_balance_seeds_pool():
+    # Opening balance of 100 shares @ $120 ACB/share, then sell in the same year
+    txs = [
+        opening("GOOG", "2024-12-31", "100", "120.00"),
+        sell("GOOG", "2025-07-01", "40", "200.00"),
+    ]
+    pools = compute_acb_pools(txs)
+    # 60 shares remain, ACB unchanged per share
+    assert pools["GOOG"].shares == Decimal("60")
+    assert pools["GOOG"].total_acb == Decimal("7200.00")  # 60 * 120
+
+
+def test_opening_balance_averages_with_subsequent_vests():
+    txs = [
+        opening("GOOG", "2024-12-31", "100", "120.00"),   # pool: 100 @ 120 = 12000
+        vest("GOOG", "2025-01-25", "50", "200.00"),        # pool: 150 @ 146.67 = 22000
+    ]
+    pools = compute_acb_pools(txs)
+    assert pools["GOOG"].shares == Decimal("150")
+    assert pools["GOOG"].total_acb == Decimal("22000.00")
+
+
+def test_opening_balance_enables_sell_that_would_otherwise_fail():
+    # Without opening balance this sell would raise ValueError (insufficient shares)
+    txs = [
+        opening("GOOG", "2024-12-31", "500", "100.00"),
+        vest("GOOG", "2025-01-25", "50", "200.00"),
+        sell("GOOG", "2025-07-01", "400", "250.00"),
+    ]
+    gains = compute_capital_gains(txs, 2025)
+    assert len(gains) == 1
+    # ACB per share after opening + vest: (500*100 + 50*200) / 550 = 60000/550 ≈ 109.09
+    assert gains[0].shares_sold == Decimal("400")
 
 
 def test_single_vest_creates_pool():

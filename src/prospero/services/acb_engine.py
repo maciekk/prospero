@@ -58,7 +58,7 @@ def compute_acb_pools(transactions: list[StockTransaction]) -> dict[str, AcbPool
     for tx in _sorted_txs(transactions):
         shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
 
-        if tx.transaction_type in (TransactionType.VEST, TransactionType.BUY):
+        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
             # Add shares to pool at their acquisition cost.
             # For RSU vests: FMV at vest == ACB because the employment benefit was
             # already included in your T4 income — no additional income on eventual sale.
@@ -119,7 +119,7 @@ def compute_capital_gains(
     for tx in _sorted_txs(transactions):
         shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
 
-        if tx.transaction_type in (TransactionType.VEST, TransactionType.BUY):
+        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
             pools[tx.ticker] = (shares + tx.quantity, acb + tx.quantity * tx.price_per_share)
 
         elif tx.transaction_type == TransactionType.SELL:

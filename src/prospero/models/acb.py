@@ -6,9 +6,10 @@ from pydantic import BaseModel, field_validator
 
 
 class TransactionType(str, Enum):
-    VEST = "vest"  # RSU vesting — FMV at vest becomes the ACB (already taxed as employment income on T4)
-    BUY = "buy"    # Regular market purchase — purchase price becomes ACB
-    SELL = "sell"  # Disposition — triggers capital gain/loss calculation
+    OPENING = "opening"  # Carry-forward seed: shares held with known ACB before ledger history begins
+    VEST = "vest"        # RSU vesting — FMV at vest becomes the ACB (already taxed as employment income on T4)
+    BUY = "buy"          # Regular market purchase — purchase price becomes ACB
+    SELL = "sell"        # Disposition — triggers capital gain/loss calculation
 
 
 class StockTransaction(BaseModel):

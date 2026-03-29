@@ -144,6 +144,35 @@ def import_ms(
     console.print(f"[green]Imported {len(transactions)} transaction(s).[/green]")
 
 
+@app.command("add-opening-balance")
+def add_opening_balance(
+    ticker: str = typer.Option(..., help="Ticker symbol (e.g. GOOG)"),
+    date_str: str = typer.Option(..., "--date", help="Date of the opening balance (YYYY-MM-DD) — use the day before your first imported transaction"),
+    shares: float = typer.Option(..., "--shares", help="Total shares held as of that date"),
+    acb_per_share: float = typer.Option(..., "--acb-per-share", help="Average cost basis per share (from your broker's cost basis statement)"),
+) -> None:
+    """
+    Seed the ACB pool with shares held before your transaction history begins.
+
+    Use this when you held shares prior to your earliest imported activity report.
+    Set --date to just before your first imported transaction (e.g. 2024-12-31).
+    Get the values from your broker's cost basis statement or account page.
+    """
+    tx = StockTransaction(
+        ticker=ticker,
+        transaction_type=TransactionType.OPENING,
+        date=_parse_date(date_str),
+        quantity=Decimal(str(shares)),
+        price_per_share=Decimal(str(acb_per_share)),
+    )
+    ledger = load_acb_ledger()
+    ledger.transactions.append(tx)
+    save_acb_ledger(ledger)
+    console.print(
+        f"[green]Opening balance: {tx.quantity} {tx.ticker} @ ${tx.price_per_share} ACB/share on {tx.date}[/green]"
+    )
+
+
 @app.command("add-vest")
 def add_vest(
     ticker: str = typer.Option(..., help="Ticker symbol (e.g. AAPL)"),
