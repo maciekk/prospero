@@ -22,7 +22,7 @@ from rich.console import Console
 from rich.table import Table
 
 from prospero.models.acb import StockTransaction, TransactionType
-from prospero.services.acb_csv import parse_csv
+from prospero.services.acb_csv import parse_csv, parse_ms_activity_dir
 from prospero.services.acb_engine import acb_report, compute_acb_pools
 from prospero.storage.store import load_acb_ledger, save_acb_ledger
 from prospero.display.tables import render_acb_pools, render_capital_gains_report
@@ -88,6 +88,48 @@ def import_csv(
 
     if not transactions:
         console.print("[dim]No transactions found in file.[/dim]")
+        return
+
+    _render_import_preview(transactions)
+
+    if dry_run:
+        console.print("[dim]Dry run — nothing saved.[/dim]")
+        return
+
+    ledger = load_acb_ledger()
+    ledger.transactions.extend(transactions)
+    save_acb_ledger(ledger)
+    console.print(f"[green]Imported {len(transactions)} transaction(s).[/green]")
+
+
+@app.command("import-ms")
+def import_ms(
+    directory: Path = typer.Option(..., "--dir", help="Directory containing the unpacked MS Activity Report"),
+    ticker: str = typer.Option(..., help="Ticker symbol for the stock (e.g. GOOG) — not present in MS files"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be imported without saving"),
+) -> None:
+    """
+    Import from a Morgan Stanley Activity Report directory.
+
+    Unpack the zip Morgan Stanley provides, then point --dir at the folder.
+    Two files are read automatically:
+      "Releases Net Shares Report.csv"  — RSU vesting events
+      "Withdrawals Report.csv"          — sale events
+
+    You must supply --ticker because MS files don't include the symbol.
+    """
+    if not directory.is_dir():
+        err.print(f"[red]Not a directory: {directory}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        transactions = parse_ms_activity_dir(directory, ticker)
+    except (FileNotFoundError, ValueError) as e:
+        err.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    if not transactions:
+        console.print("[dim]No transactions found in MS activity report.[/dim]")
         return
 
     _render_import_preview(transactions)

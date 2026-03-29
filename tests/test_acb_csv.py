@@ -3,7 +3,7 @@ Tests for src/prospero/services/acb_csv.py
 
 Covers: successful parsing, case-insensitive type column, column normalisation,
 error reporting (individual field errors, multiple errors collected together),
-edge cases (empty file, BOM).
+edge cases (empty file, BOM), and the Morgan Stanley Activity Report parser.
 """
 
 import pytest
@@ -11,7 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from prospero.models.acb import TransactionType
-from prospero.services.acb_csv import parse_csv
+from prospero.services.acb_csv import parse_csv, parse_ms_activity_dir
 
 
 def write_csv(tmp_path: Path, content: str) -> Path:
@@ -155,3 +155,79 @@ def test_missing_column_raises_before_any_rows(tmp_path):
 def test_file_not_found_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         parse_csv(tmp_path / "nonexistent.csv")
+
+
+# ---------------------------------------------------------------------------
+# Morgan Stanley Activity Report parser
+# ---------------------------------------------------------------------------
+
+_MS_RELEASES = "Releases Net Shares Report.csv"
+_MS_WITHDRAWALS = "Withdrawals Report.csv"
+
+_RELEASES_CONTENT = """\
+Date,Order Number,Plan,Type,Order Status,Price,Quantity,Net Share Proceeds,Net Share Proceeds,Tax Payment Method
+25-Jan-2025,N/A,GSU Class C,Released Shares,Completed,$280.494582,11.269,$0.00,0.000,N/A
+25-Jan-2025,N/A,GSU Class C,Released Shares,Completed,$280.494582,21.363,$0.00,0.000,N/A
+"""
+
+_WITHDRAWALS_CONTENT = """\
+Execution Date,Order Number,Plan,Type,Order Status,Price,Quantity,Net Amount,Net Share Proceeds,Tax Payment Method
+25-Jul-2025,WRC94ED3683-1EE,GSU Class C,Sale,Complete,$269.46,-380.565,"$102,545.82",0,N/A
+Please note that any Alphabet share sales, transfers, or deposits that occurred on or prior to the July 15, 2022 stock split are reflected in pre-split. Any sales, transfers, or deposits that occurred after July 15, 2022 are in post-split values. For GSU vests, your activity is displayed in post-split values.
+"""
+
+
+def _write_ms_dir(tmp_path, releases=_RELEASES_CONTENT, withdrawals=_WITHDRAWALS_CONTENT):
+    (tmp_path / _MS_RELEASES).write_text(releases, encoding="utf-8")
+    (tmp_path / _MS_WITHDRAWALS).write_text(withdrawals, encoding="utf-8")
+    return tmp_path
+
+
+def test_ms_parses_vests(tmp_path):
+    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    vests = [t for t in txs if t.transaction_type == TransactionType.VEST]
+    assert len(vests) == 2
+    assert vests[0].ticker == "GOOG"
+    assert vests[0].quantity == Decimal("11.269")
+    assert vests[0].price_per_share == Decimal("280.494582")
+    from datetime import date
+    assert vests[0].date == date(2025, 1, 25)
+
+
+def test_ms_parses_sells(tmp_path):
+    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    sells = [t for t in txs if t.transaction_type == TransactionType.SELL]
+    assert len(sells) == 1
+    assert sells[0].quantity == Decimal("380.565")  # sign stripped
+    assert sells[0].price_per_share == Decimal("269.46")
+
+
+def test_ms_footer_row_skipped(tmp_path):
+    # Withdrawals file has a prose footer line — must not cause an error
+    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    sells = [t for t in txs if t.transaction_type == TransactionType.SELL]
+    assert len(sells) == 1  # only one real sell row
+
+
+def test_ms_ticker_uppercased(tmp_path):
+    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="goog")
+    assert all(t.ticker == "GOOG" for t in txs)
+
+
+def test_ms_results_sorted_by_date(tmp_path):
+    # Vests are in Jan, sell is in Jul — sorted output should put vests first
+    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    dates = [t.date for t in txs]
+    assert dates == sorted(dates)
+
+
+def test_ms_missing_releases_file_raises(tmp_path):
+    (tmp_path / _MS_WITHDRAWALS).write_text(_WITHDRAWALS_CONTENT)
+    with pytest.raises(FileNotFoundError, match=_MS_RELEASES):
+        parse_ms_activity_dir(tmp_path, ticker="GOOG")
+
+
+def test_ms_missing_withdrawals_file_raises(tmp_path):
+    (tmp_path / _MS_RELEASES).write_text(_RELEASES_CONTENT)
+    with pytest.raises(FileNotFoundError, match=_MS_WITHDRAWALS):
+        parse_ms_activity_dir(tmp_path, ticker="GOOG")
