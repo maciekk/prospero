@@ -241,7 +241,12 @@ def show() -> None:
     if not ledger.transactions:
         console.print("[dim]No transactions recorded yet. Use 'prospero acb import' to get started.[/dim]")
         return
-    pools = compute_acb_pools(ledger.transactions)
+    try:
+        pools = compute_acb_pools(ledger.transactions)
+    except ValueError as e:
+        err.print(f"[red]Error: {e}[/red]")
+        err.print("[yellow]Tip: this usually means transactions from a prior year are missing from the ledger. Import earlier activity reports first.[/yellow]")
+        raise typer.Exit(1)
     if not pools:
         console.print("[dim]No current holdings — all positions have been closed.[/dim]")
         return
@@ -267,7 +272,12 @@ def report(
     if not ledger.transactions:
         console.print("[dim]No transactions recorded yet. Use 'prospero acb import' to get started.[/dim]")
         return
-    pools, gains, total_taxable = acb_report(ledger.transactions, target_year)
+    try:
+        pools, gains, total_taxable = acb_report(ledger.transactions, target_year)
+    except ValueError as e:
+        err.print(f"[red]Error: {e}[/red]")
+        err.print("[yellow]Tip: this usually means transactions from a prior year are missing from the ledger. Import earlier activity reports first.[/yellow]")
+        raise typer.Exit(1)
     render_capital_gains_report(gains, target_year, total_taxable)
     if pools:
         console.print()
