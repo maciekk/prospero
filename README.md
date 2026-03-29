@@ -105,9 +105,20 @@ Track Adjusted Cost Basis for Canadian stock grants (RSUs) and compute capital g
 
 **Background:** When RSUs vest, CRA treats the fair market value (FMV) at vest as employment income — it appears on your T4. This means the ACB of your vested shares equals the FMV at vest. When you sell, only the appreciation *after* vesting is a capital gain. Canada uses the **identical-shares average cost method**: all shares of the same ticker form one ACB pool, and the per-share ACB is always `total_acb / total_shares`.
 
-#### CSV Import (primary workflow)
+#### Morgan Stanley Activity Report
 
-Prepare a CSV from your broker's transaction history with these columns:
+If your broker is Morgan Stanley, unpack the Activity Report zip and point `import-ms` at the folder — no manual CSV prep needed:
+
+```bash
+prospero acb import-ms --dir ~/Downloads/MS-activity-report-2025 --ticker GOOG --dry-run
+prospero acb import-ms --dir ~/Downloads/MS-activity-report-2025 --ticker GOOG
+```
+
+The ticker must be supplied as it is not included in the MS files. `--dry-run` previews without saving.
+
+#### CSV Import
+
+For other brokers, prepare a CSV from your transaction history with these columns:
 
 ```
 date,type,ticker,quantity,price
