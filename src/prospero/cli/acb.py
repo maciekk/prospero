@@ -23,6 +23,7 @@ from rich.table import Table
 
 from prospero.models.acb import StockTransaction, TransactionType
 from prospero.services.acb_csv import parse_csv, parse_ms_activity_dir
+from prospero.services.fx import get_rates_for_transactions
 from prospero.services.acb_engine import acb_report, compute_acb_pools
 from prospero.storage.store import load_acb_ledger, save_acb_ledger
 from prospero.display.tables import render_acb_pools, render_capital_gains_report
@@ -295,19 +296,31 @@ def report(
 
     Defaults to the previous calendar year — the one you are most likely filing.
     Also shows your current ACB pools so you can see what carries forward.
+    Automatically fetches Bank of Canada USD/CAD rates to show CAD amounts.
     """
     target_year = year or (datetime.date.today().year - 1)
     ledger = load_acb_ledger()
     if not ledger.transactions:
         console.print("[dim]No transactions recorded yet. Use 'prospero acb import' to get started.[/dim]")
         return
+
+    # Fetch Bank of Canada FX rates for all transaction dates
+    fx_rates = None
     try:
-        pools, gains, total_taxable = acb_report(ledger.transactions, target_year)
+        console.print("[dim]Fetching Bank of Canada USD/CAD rates…[/dim]")
+        fx_rates = get_rates_for_transactions(ledger.transactions)
+    except Exception as e:
+        err.print(f"[yellow]Could not fetch FX rates ({e}). Showing USD only.[/yellow]")
+
+    try:
+        pools, gains, total_taxable_usd, total_taxable_cad = acb_report(
+            ledger.transactions, target_year, fx_rates
+        )
     except ValueError as e:
         err.print(f"[red]Error: {e}[/red]")
         err.print("[yellow]Tip: this usually means transactions from a prior year are missing from the ledger. Import earlier activity reports first.[/yellow]")
         raise typer.Exit(1)
-    render_capital_gains_report(gains, target_year, total_taxable)
+    render_capital_gains_report(gains, target_year, total_taxable_usd, total_taxable_cad)
     if pools:
         console.print()
         render_acb_pools(pools)

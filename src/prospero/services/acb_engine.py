@@ -149,25 +149,130 @@ def compute_capital_gains(
     return gains
 
 
+def compute_capital_gains_cad(
+    transactions: list[StockTransaction],
+    year: int,
+    fx_rates: dict,  # dict[date, Decimal] — date -> USD/CAD rate
+) -> list[CapitalGainEntry]:
+    """
+    Replay the full transaction history and return CapitalGainEntry objects for
+    every SELL in `year`, with CAD fields populated using Bank of Canada rates.
+
+    Why CAD ACB ≠ USD ACB × sell-date rate
+    ----------------------------------------
+    The CRA requires each acquisition to be converted to CAD at the rate on the
+    *acquisition date*. Over time, many vests at different rates build up a CAD
+    ACB pool that reflects historical exchange rates — not today's rate. When you
+    sell, the CAD proceeds use the sell-date rate, but the CAD ACB used comes from
+    that historically-built pool. The capital gain in CAD is therefore:
+
+        proceeds_cad  = shares_sold × usd_price × sell_date_rate
+        acb_used_cad  = shares_sold × (cad_acb_pool / shares)
+        gain_cad      = proceeds_cad − acb_used_cad
+
+    This function maintains a parallel CAD pool alongside the USD pool to compute
+    this correctly.
+
+    Transaction dates missing from fx_rates are skipped for CAD computation
+    (the returned entry will have None CAD fields for those sells).
+    """
+    gains: list[CapitalGainEntry] = []
+    # USD pool: (total_shares, total_acb_usd)
+    usd_pools: dict[str, tuple[Decimal, Decimal]] = {}
+    # CAD pool: (total_shares, total_acb_cad) — parallel, same share counts
+    cad_pools: dict[str, tuple[Decimal, Decimal]] = {}
+
+    for tx in _sorted_txs(transactions):
+        usd_shares, usd_acb = usd_pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        _, cad_acb = cad_pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        rate = fx_rates.get(tx.date)  # None if date not available
+
+        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
+            cost_usd = tx.quantity * tx.price_per_share
+            usd_pools[tx.ticker] = (usd_shares + tx.quantity, usd_acb + cost_usd)
+            if rate is not None:
+                cad_pools[tx.ticker] = (usd_shares + tx.quantity, cad_acb + cost_usd * rate)
+            else:
+                # No rate for this date — CAD pool gets a None sentinel so we know
+                # the CAD values are incomplete. Store USD cost as fallback.
+                cad_pools[tx.ticker] = (usd_shares + tx.quantity, cad_acb + cost_usd)
+
+        elif tx.transaction_type == TransactionType.SELL:
+            usd_acb_per_share = usd_acb / usd_shares
+            usd_acb_used = (tx.quantity * usd_acb_per_share).quantize(_TWO_PLACES, ROUND_HALF_UP)
+            usd_proceeds = (tx.quantity * tx.price_per_share).quantize(_TWO_PLACES, ROUND_HALF_UP)
+            usd_gain = usd_proceeds - usd_acb_used
+            usd_taxable = (usd_gain * _INCLUSION_RATE).quantize(_TWO_PLACES, ROUND_HALF_UP)
+
+            usd_pools[tx.ticker] = (usd_shares - tx.quantity, usd_acb - usd_acb_used)
+            cad_acb_per_share = cad_acb / usd_shares
+            cad_acb_used = (tx.quantity * cad_acb_per_share).quantize(_TWO_PLACES, ROUND_HALF_UP)
+            cad_pools[tx.ticker] = (usd_shares - tx.quantity, cad_acb - cad_acb_used)
+
+            if tx.date.year == year:
+                # Populate CAD fields only if sell-date rate is available
+                if rate is not None:
+                    cad_proceeds = (usd_proceeds * rate).quantize(_TWO_PLACES, ROUND_HALF_UP)
+                    cad_gain = cad_proceeds - cad_acb_used
+                    cad_taxable = (cad_gain * _INCLUSION_RATE).quantize(_TWO_PLACES, ROUND_HALF_UP)
+                else:
+                    cad_proceeds = cad_gain = cad_taxable = None
+
+                gains.append(CapitalGainEntry(
+                    date=tx.date,
+                    ticker=tx.ticker,
+                    shares_sold=tx.quantity,
+                    proceeds=usd_proceeds,
+                    acb_used=usd_acb_used,
+                    capital_gain=usd_gain,
+                    taxable_gain=usd_taxable,
+                    exchange_rate=rate,
+                    proceeds_cad=cad_proceeds,
+                    acb_used_cad=cad_acb_used,
+                    capital_gain_cad=cad_gain,
+                    taxable_gain_cad=cad_taxable,
+                ))
+
+    return gains
+
+
 def acb_report(
     transactions: list[StockTransaction],
     year: int,
-) -> tuple[dict[str, AcbPoolEntry], list[CapitalGainEntry], Decimal]:
+    fx_rates: dict | None = None,
+) -> tuple[dict[str, AcbPoolEntry], list[CapitalGainEntry], Decimal, Decimal | None]:
     """
     Compute the full ACB report for a tax year.
 
-    Returns:
-        pools          — current ACB pool for all tickers with remaining shares
-        gains          — one CapitalGainEntry per disposition in the requested year
-        total_taxable  — sum of all taxable_gain entries (losses reduce the total)
+    Pass fx_rates (dict[date, Decimal] from fx.get_rates_for_transactions) to get
+    CAD-denominated values alongside USD values. When fx_rates is None, CAD fields
+    on each CapitalGainEntry will be None and total_taxable_cad will be None.
 
-    Note: total_taxable can be negative if losses exceed gains. Capital losses can be
+    Returns:
+        pools               — current ACB pool (USD) for all tickers with remaining shares
+        gains               — one CapitalGainEntry per disposition in the requested year
+        total_taxable_usd   — sum of taxable_gain (USD) entries
+        total_taxable_cad   — sum of taxable_gain_cad entries, or None if no FX rates
+
+    Note: totals can be negative if losses exceed gains. Capital losses can be
     applied against capital gains in the same year, carried back 3 years, or carried
     forward indefinitely (CRA T1A form).
     """
     pools = compute_acb_pools(transactions)
-    gains = compute_capital_gains(transactions, year)
-    total_taxable = sum(
+    if fx_rates is not None:
+        gains = compute_capital_gains_cad(transactions, year, fx_rates)
+    else:
+        gains = compute_capital_gains(transactions, year)
+
+    total_taxable_usd = sum(
         (g.taxable_gain for g in gains), Decimal("0")
     ).quantize(_TWO_PLACES, ROUND_HALF_UP)
-    return pools, gains, total_taxable
+
+    if fx_rates is not None and all(g.taxable_gain_cad is not None for g in gains):
+        total_taxable_cad = sum(
+            (g.taxable_gain_cad for g in gains), Decimal("0")  # type: ignore[arg-type]
+        ).quantize(_TWO_PLACES, ROUND_HALF_UP)
+    else:
+        total_taxable_cad = None
+
+    return pools, gains, total_taxable_usd, total_taxable_cad

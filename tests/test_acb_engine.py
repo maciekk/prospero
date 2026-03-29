@@ -291,7 +291,7 @@ def test_acb_report_returns_correct_tuple():
         vest("AAPL", "2024-01-15", "25", "185.50"),
         sell("AAPL", "2024-06-15", "20", "210.00"),
     ]
-    pools, gains, total_taxable = acb_report(txs, 2024)
+    pools, gains, total_taxable, _ = acb_report(txs, 2024)
 
     assert "AAPL" in pools
     assert pools["AAPL"].shares == Decimal("5")
@@ -308,7 +308,7 @@ def test_acb_report_total_taxable_sums_all_gains():
         sell("AAPL", "2024-03-01", "10", "120.00"),  # taxable = 100
         sell("AAPL", "2024-09-01", "10", "110.00"),  # taxable = 50
     ]
-    _, gains, total_taxable = acb_report(txs, 2024)
+    _, gains, total_taxable, _ = acb_report(txs, 2024)
     expected = sum(g.taxable_gain for g in gains)
     assert total_taxable == expected
     assert total_taxable == Decimal("150.00")
@@ -319,7 +319,7 @@ def test_acb_report_no_sells_zero_taxable():
         vest("AAPL", "2024-01-01", "10", "150.00"),
         buy("GOOG", "2024-06-01", "5", "100.00"),
     ]
-    pools, gains, total_taxable = acb_report(txs, 2024)
+    pools, gains, total_taxable, _ = acb_report(txs, 2024)
     assert gains == []
     assert total_taxable == Decimal("0.00")
     assert "AAPL" in pools
