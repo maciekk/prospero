@@ -120,7 +120,7 @@ The ticker must be supplied as it is not included in the MS files. `--dry-run` p
 **If you held shares before your earliest activity report** (common when importing only the current year), the import will fail with an oversell error. Seed the ledger first using the **Vested Share Holdings** report on MS Stockplan Connect:
 
 1. Log in to MS Stockplan Connect → Reports → Vested Share Holdings
-2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024)
+2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024 if importing 2025 activity)
 3. Note *Number of Shares* and *Acquisition Value* for your ticker
 4. ACB per share = Acquisition Value ÷ Number of Shares
    *(MS defines Acquisition Value as FMV at vest × shares held, which equals total ACB for RSUs)*
@@ -129,6 +129,7 @@ The ticker must be supplied as it is not included in the MS files. `--dry-run` p
 ```bash
 prospero acb add-opening-balance --ticker GOOG --date 2024-12-31 \
   --shares <Number of Shares> --acb-per-share <Acquisition Value ÷ Shares>
+prospero acb import-ms --dir ~/Downloads/MS-activity-report-2025 --ticker GOOG
 ```
 
 #### CSV Import
