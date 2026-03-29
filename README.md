@@ -101,6 +101,7 @@ Track Adjusted Cost Basis for Canadian stock grants (RSUs) and compute capital g
 **Workflow:**
 1. Import your broker's transaction history (or enter events manually)
    - Transactions are saved to a local ledger (`~/.prospero/acb_ledger.json`)
+   - If the ledger gets into a bad state, just delete that file and re-import
 2. Run `prospero acb report` for capital gains/losses, or `prospero acb show` for current ACB pools
 
 **Background:** When RSUs vest, CRA treats the fair market value (FMV) at vest as employment income — it appears on your T4. This means the ACB of your vested shares equals the FMV at vest. When you sell, only the appreciation *after* vesting is a capital gain. Canada uses the **identical-shares average cost method**: all shares of the same ticker form one ACB pool, and the per-share ACB is always `total_acb / total_shares`.
