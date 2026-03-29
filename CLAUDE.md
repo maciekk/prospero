@@ -106,18 +106,19 @@ Canada uses the **identical-shares average cost method** (ITA s.47): all shares 
 ## Running the Project
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-prospero --help
+uv sync --extra dev
+uv run prospero --help
 ```
 
 ## Running Tests
 
 ```bash
-pytest -v               # all tests
-pytest tests/test_tax.py
-pytest -k fire          # filter by keyword
+uv run pytest -v               # all tests
+uv run pytest tests/test_tax.py
+uv run pytest -k fire          # filter by keyword
 ```
+
+Dev dependencies (pytest etc.) are in the `dev` extra. If pytest is not found, run `uv sync --extra dev` first.
 
 Tests use `tmp_path` + `monkeypatch` to redirect `DATA_DIR` — they never touch `~/.prospero/`.
 
