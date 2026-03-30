@@ -1,0 +1,9 @@
+Execution Date,Order Number,Plan,Type,Order Status,Price,Quantity,Net Amount,Net Share Proceeds,Tax Payment Method
+22-May-2023,WRC1A2B3C4D5-1EE,GSU Class C,Sale,Complete,$112.30,-98.456,"$11,056.61",0,N/A
+18-Sep-2023,WRC2B3C4D5E6-1EE,GSU Class C,Sale,Complete,$125.80,-75.234,"$9,464.44",0,N/A
+15-Feb-2024,WRC3C4D5E6F7-1EE,GSU Class C,Sale,Complete,$143.20,-112.345,"$16,087.80",0,N/A
+20-Jun-2024,WRC4D5E6F7G8-1EE,GSU Class C,Sale,Complete,$161.50,-89.678,"$14,483.00",0,N/A
+12-Mar-2025,WRC5E6F7G8H9-1EE,GSU Class C,Sale,Complete,$204.80,-145.234,"$29,743.92",0,N/A
+19-Aug-2025,WRC6F7G8H9I0-1EE,GSU Class C,Sale,Complete,$241.60,-103.456,"$24,994.97",0,N/A
+08-Dec-2025,WRC7G8H9I0J1-1EE,GSU Class C,Sale,Complete,$272.30,-87.123,"$23,723.59",0,N/A
+"Note: A 2-for-1 stock split occurred on 15-Jul-2021. Share quantities and prices shown above reflect post-split values. Pre-split transactions are adjusted accordingly.",,,,,,,,,,
