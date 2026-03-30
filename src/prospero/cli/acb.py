@@ -41,7 +41,7 @@ def _parse_date(s: str) -> datetime.date:
 
 
 def _price_cad(tx: "StockTransaction") -> str:
-    """Return a formatted price string in CAD, falling back to USD if rate unavailable."""
+    """Return a formatted price/share string in CAD, falling back to USD if rate unavailable."""
     try:
         rates = get_rates_for_transactions([tx])
         rate = rates.get(tx.date)
@@ -53,6 +53,51 @@ def _price_cad(tx: "StockTransaction") -> str:
     return f"${tx.price_per_share:,.4f} USD"
 
 
+def _total_acb_cad(tx: "StockTransaction") -> str:
+    """Return a formatted total ACB string (quantity × price) in CAD, falling back to USD."""
+    try:
+        rates = get_rates_for_transactions([tx])
+        rate = rates.get(tx.date)
+        if rate is not None:
+            cad = tx.quantity * tx.price_per_share * rate
+            return f"${cad:,.2f} CAD"
+    except Exception:
+        pass
+    return f"${tx.quantity * tx.price_per_share:,.2f} USD"
+
+
+def _compute_sell_acb_used(
+    new_transactions: list[StockTransaction],
+) -> dict[int, Decimal]:
+    """
+    Replay the existing ledger plus new_transactions and return a mapping of
+    id(tx) -> total_acb_used_usd for every SELL in new_transactions.
+
+    total_acb_used = shares_sold × (total_acb / total_shares) at time of sale.
+
+    This lets the preview table show the ACB consumed for each sale before
+    the import is committed.
+    """
+    ledger = load_acb_ledger()
+    new_ids = {id(tx) for tx in new_transactions}
+    all_txs = sorted(ledger.transactions + new_transactions, key=lambda t: t.date)
+
+    pools: dict[str, tuple[Decimal, Decimal]] = {}  # ticker -> (shares, total_acb)
+    result: dict[int, Decimal] = {}
+
+    for tx in all_txs:
+        shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
+            pools[tx.ticker] = (shares + tx.quantity, acb + tx.quantity * tx.price_per_share)
+        elif tx.transaction_type == TransactionType.SELL:
+            acb_used = (tx.quantity * acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
+            if id(tx) in new_ids:
+                result[id(tx)] = acb_used
+            pools[tx.ticker] = (shares - tx.quantity, acb - acb_used)
+
+    return result
+
+
 def _render_import_preview(transactions: list[StockTransaction]) -> None:
     """Print a summary table of transactions about to be imported."""
     console.print("[dim]Fetching Bank of Canada USD/CAD rates…[/dim]")
@@ -61,24 +106,30 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
     except Exception:
         fx_rates = {}
 
+    sell_acb = _compute_sell_acb_used(transactions)
+
     table = Table(title=f"Preview — {len(transactions)} transaction(s)", expand=False)
     table.add_column("Date")
     table.add_column("Type")
     table.add_column("Ticker")
     table.add_column("Quantity", justify="right")
     table.add_column("Price / Share (USD)", justify="right")
+    table.add_column("ACB Used (USD)", justify="right")
     table.add_column("USD/CAD", justify="right")
     table.add_column("Price / Share (CAD)", justify="right")
     for tx in sorted(transactions, key=lambda t: t.date):
         rate = fx_rates.get(tx.date)
         rate_str = f"{rate:.4f}" if rate is not None else "—"
         cad_str = f"${tx.price_per_share * rate:,.4f}" if rate is not None else "—"
+        acb_used = sell_acb.get(id(tx))
+        acb_str = f"${acb_used:,.2f}" if acb_used is not None else "—"
         table.add_row(
             str(tx.date),
             tx.transaction_type.value,
             tx.ticker,
             str(tx.quantity),
             f"${tx.price_per_share:,.4f}",
+            acb_str,
             rate_str,
             cad_str,
         )
@@ -196,7 +247,7 @@ def add_opening_balance(
     ledger.transactions.append(tx)
     save_acb_ledger(ledger)
     console.print(
-        f"[green]Opening balance: {tx.quantity} {tx.ticker} @ {_price_cad(tx)} ACB/share on {tx.date}[/green]"
+        f"[green]Opening balance: {tx.quantity} {tx.ticker} — total ACB {_total_acb_cad(tx)} on {tx.date}[/green]"
     )
 
 
