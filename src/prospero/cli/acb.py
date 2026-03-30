@@ -20,6 +20,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 from prospero.models.acb import StockTransaction, TransactionType
 from prospero.services.acb_csv import parse_csv, parse_ms_activity_dir
@@ -114,16 +115,19 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
 
     acb_used_map, pool_acb_after_map = _compute_preview_data(transactions)
 
+    def _ch(label: str) -> Text:
+        return Text(label, justify="center")
+
     table = Table(title=f"Preview — {len(transactions)} transaction(s)", expand=False)
     table.add_column("Date")
     table.add_column("Type")
     table.add_column("Ticker")
-    table.add_column("Quantity", justify="right")
-    table.add_column("Price / Share (USD)", justify="right")
-    table.add_column("ACB Used (USD)", justify="right")
-    table.add_column("Pool ACB (USD)", justify="right")
-    table.add_column("USD/CAD", justify="right")
-    table.add_column("Price / Share (CAD)", justify="right")
+    table.add_column(_ch("Units"), justify="right")
+    table.add_column(_ch("Price\n(USD)"), justify="right")
+    table.add_column(_ch("ACB Used\n(USD)"), justify="right")
+    table.add_column(_ch("Total ACB\n(USD)"), justify="right")
+    table.add_column(_ch("Exchange\n(USD/CAD)"), justify="right")
+    table.add_column(_ch("Price\n(CAD)"), justify="right")
     for tx in sorted(transactions, key=lambda t: t.date):
         rate = fx_rates.get(tx.date)
         rate_str = f"{rate:.4f}" if rate is not None else "—"
@@ -137,7 +141,7 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
             tx.transaction_type.value,
             tx.ticker,
             str(tx.quantity),
-            f"${tx.price_per_share:,.4f}",
+            f"${tx.price_per_share:,.2f}",
             acb_str,
             pool_str,
             rate_str,
@@ -410,4 +414,4 @@ def report(
     render_capital_gains_report(gains, target_year, total_taxable_cad)
     if pools:
         console.print()
-        render_acb_pools(pools)
+        render_acb_pools(pools, title=f"Year End Holdings & Cost Basis ({target_year})")

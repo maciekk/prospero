@@ -246,16 +246,16 @@ def render_portfolio_summary(summary: PortfolioSummary) -> None:
     ))
 
 
-def render_acb_pools(pools: dict[str, AcbPoolEntry]) -> None:
-    """Render a table of current ACB pools — one row per ticker with remaining shares."""
+def render_acb_pools(pools: dict[str, AcbPoolEntry], title: str = "Holdings & Cost Basis") -> None:
+    """Render a table of ACB pools — one row per ticker with remaining shares."""
     has_cad = any(e.acb_per_share_cad is not None for e in pools.values())
-    acb_col = "ACB / Share (CAD)" if has_cad else "ACB / Share (USD)"
+    acb_col = "ACB / Share\n(CAD)" if has_cad else "ACB / Share\n(USD)"
 
-    table = Table(title="Current ACB Pools", expand=False)
+    table = Table(title=title, expand=False)
     table.add_column("Ticker")
     table.add_column("Shares", justify="right")
     table.add_column(acb_col, justify="right")
-    table.add_column("Total ACB (USD)", justify="right")
+    table.add_column("Total ACB\n(USD)", justify="right")
 
     for entry in sorted(pools.values(), key=lambda e: e.ticker):
         acb_display = _money(entry.acb_per_share_cad) if has_cad and entry.acb_per_share_cad is not None else _money(entry.acb_per_share)
@@ -287,17 +287,21 @@ def render_capital_gains_report(
 
     has_cad = any(g.capital_gain_cad is not None for g in gains)
 
+    def _ch(label: str) -> Text:
+        """Centered column header for use with right-justified data columns."""
+        return Text(label, justify="center")
+
     table = Table(title=f"Capital Gains / Losses — {year}", expand=False)
     table.add_column("Date")
     table.add_column("Ticker")
-    table.add_column("Shares Sold", justify="right", max_width=8)
-    table.add_column("Proceeds (USD)", justify="right")
-    table.add_column("ACB Used (USD)", justify="right")
-    table.add_column("Gain / Loss (USD)", justify="right")
+    table.add_column(_ch("Shares\nSold"), justify="right", max_width=8)
+    table.add_column(_ch("Proceeds\n(USD)"), justify="right")
+    table.add_column(_ch("ACB Used\n(USD)"), justify="right")
+    table.add_column(_ch("Gain / Loss\n(USD)"), justify="right")
     if has_cad:
-        table.add_column("Rate", justify="right")
-        table.add_column("Gain / Loss (CAD)", justify="right")
-        table.add_column("Taxable CAD", justify="right")
+        table.add_column(_ch("Exchange\n(USD/CAD)"), justify="right")
+        table.add_column(_ch("Gain / Loss\n(CAD)"), justify="right")
+        table.add_column(_ch("Taxable\n(CAD)"), justify="right")
 
     for g in sorted(gains, key=lambda e: e.date):
         row = [
@@ -346,10 +350,11 @@ def render_capital_gains_report(
         lines += [
             f"Total capital gain / loss (CAD):  {_money(total_gain_cad)}",
             f"Taxable amount 50% (CAD):         {_money(total_taxable_cad)}",
-            "[dim]Rates: Bank of Canada daily USD/CAD (weekends/holidays use prior business day)[/dim]",
         ]
-    lines += [
-        "",
+    notes = []
+    if has_cad and total_taxable_cad is not None:
+        notes.append("[dim]Rates: Bank of Canada daily USD/CAD (weekends/holidays use prior business day)[/dim]")
+    notes += [
         "[dim]The 50% inclusion rate applies to net capital gains for 2024.[/dim]",
         "[dim]Capital losses can offset gains in the same year, be carried back[/dim]",
         "[dim]3 years (T1A), or carried forward indefinitely.[/dim]",
@@ -357,6 +362,7 @@ def render_capital_gains_report(
         "[dim]same security within 30 days before or after the sale.[/dim]",
         "[dim italic]For reference only — not professional tax advice.[/dim italic]",
     ]
+    lines += [""] + notes
 
     console.print(Panel(
         "\n".join(lines),

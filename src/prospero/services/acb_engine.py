@@ -43,10 +43,17 @@ def _sorted_txs(transactions: list[StockTransaction]) -> list[StockTransaction]:
     return sorted(transactions, key=lambda t: t.date)
 
 
-def compute_acb_pools(transactions: list[StockTransaction]) -> dict[str, AcbPoolEntry]:
+def compute_acb_pools(
+    transactions: list[StockTransaction],
+    as_of_year: int | None = None,
+) -> dict[str, AcbPoolEntry]:
     """
-    Replay all transactions in chronological order and return the **current** ACB pool
+    Replay all transactions in chronological order and return the ACB pool
     for each ticker that still has shares remaining.
+
+    When as_of_year is provided, only transactions up to and including Dec 31
+    of that year are replayed — useful for year-end snapshots in tax reports.
+    Without it, the full history is replayed (current state).
 
     Tickers where all shares have been sold are excluded from the result.
 
@@ -55,7 +62,8 @@ def compute_acb_pools(transactions: list[StockTransaction]) -> dict[str, AcbPool
     # pools[ticker] = (total_shares, total_acb)
     pools: dict[str, tuple[Decimal, Decimal]] = {}
 
-    for tx in _sorted_txs(transactions):
+    filtered = [tx for tx in transactions if tx.date.year <= as_of_year] if as_of_year is not None else transactions
+    for tx in _sorted_txs(filtered):
         shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
 
         if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
@@ -261,7 +269,7 @@ def acb_report(
     applied against capital gains in the same year, carried back 3 years, or carried
     forward indefinitely (CRA T1A form).
     """
-    pools = compute_acb_pools(transactions)
+    pools = compute_acb_pools(transactions, as_of_year=year)
     if fx_rates is not None:
         gains, final_cad_pools = compute_capital_gains_cad(transactions, year, fx_rates)
         for ticker, entry in pools.items():
