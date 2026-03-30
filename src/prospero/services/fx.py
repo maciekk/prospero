@@ -82,9 +82,11 @@ def get_rates_for_transactions(
     transactions: list,  # list[StockTransaction] — avoid circular import
 ) -> dict[date, Decimal]:
     """
-    Convenience wrapper: collect all unique transaction dates, fetch rates in
-    the minimum number of API calls (one per year-range), and return a combined
-    dict covering every transaction date.
+    Collect all unique transaction dates, return USD/CAD rates for each.
+
+    Rates are cached in ~/.prospero/fx_rates_cache.json so repeated calls
+    for the same dates never hit the network. Only dates missing from the
+    cache trigger a Bank of Canada API call.
 
     Silently skips any date for which no rate could be resolved (caller should
     check for missing dates if strict coverage is required).
@@ -92,18 +94,24 @@ def get_rates_for_transactions(
     if not transactions:
         return {}
 
+    from prospero.storage.store import load_fx_cache, save_fx_cache
+
     dates = sorted({tx.date for tx in transactions})
-    start = dates[0]
-    end = dates[-1]
+    cache = load_fx_cache()
 
-    # Fetch a little earlier than start so forward-fill works even if start_date
-    # falls on a weekend or holiday with no prior rate in the requested window.
-    padded_start = start - timedelta(days=7)
+    missing = [d for d in dates if str(d) not in cache]
+    if missing:
+        # Fetch the full range covering all missing dates, with a padding buffer
+        # so forward-fill works when the earliest missing date is a weekend/holiday.
+        padded_start = min(missing) - timedelta(days=7)
+        end = max(missing)
 
-    try:
-        rates = fetch_usd_cad_rates(padded_start, end)
-    except (RuntimeError, ValueError):
-        raise
+        try:
+            fetched = fetch_usd_cad_rates(padded_start, end)
+        except (RuntimeError, ValueError):
+            raise
 
-    # Return only the dates we actually need
-    return {d: rates[d] for d in dates if d in rates}
+        cache.update({str(d): str(r) for d, r in fetched.items()})
+        save_fx_cache(cache)
+
+    return {d: Decimal(cache[str(d)]) for d in dates if str(d) in cache}

@@ -81,6 +81,29 @@ def save_portfolio(portfolio: Portfolio) -> Path:
     return path
 
 
+# --- FX rate cache (JSON) ---
+
+def _fx_cache_path() -> Path:
+    return DATA_DIR / "fx_rates_cache.json"
+
+
+def load_fx_cache() -> dict[str, str]:
+    """Load cached USD/CAD rates. Returns {date_str: rate_str} or {} if missing."""
+    path = _fx_cache_path()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_fx_cache(cache: dict[str, str]) -> None:
+    """Persist the USD/CAD rate cache to disk."""
+    _ensure_dir()
+    _fx_cache_path().write_text(json.dumps(cache, sort_keys=True, indent=2) + "\n")
+
+
 # --- ACB ledger (JSON) ---
 
 def _acb_path() -> Path:
