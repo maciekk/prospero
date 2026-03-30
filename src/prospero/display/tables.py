@@ -252,10 +252,10 @@ def render_acb_pools(pools: dict[str, AcbPoolEntry], title: str = "Holdings & Co
     acb_col = "ACB / Share\n(CAD)" if has_cad else "ACB / Share\n(USD)"
 
     table = Table(title=title, expand=False)
-    table.add_column("Ticker")
-    table.add_column("Shares", justify="right")
-    table.add_column(acb_col, justify="right")
-    table.add_column("Total ACB\n(USD)", justify="right")
+    table.add_column(Text("Ticker", justify="center"))
+    table.add_column(Text("Shares", justify="center"), justify="right")
+    table.add_column(Text(acb_col, justify="center"), justify="right")
+    table.add_column(Text("Total ACB\n(USD)", justify="center"), justify="right")
 
     for entry in sorted(pools.values(), key=lambda e: e.ticker):
         acb_display = _money(entry.acb_per_share_cad) if has_cad and entry.acb_per_share_cad is not None else _money(entry.acb_per_share)
