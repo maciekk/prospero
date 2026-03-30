@@ -11,8 +11,8 @@ Financial simulation CLI — portfolio tracker and long-term wealth planner with
 <img src="screenshot-configure.png" width="69%">
 <img src="screenshot-plan-table.png" width="100%">
 <img src="screenshot-tax-breakdown.png" width="43%">
-<img src="screenshot-acb-ingest.png" width="80%">
-<img src="screenshot-acb-yearly.png" width="80%">
+<img src="screenshot-acb-ingest.png" width="100%">
+<img src="screenshot-acb-yearly.png" width="100%">
 
 ## Install
 
