@@ -65,14 +65,21 @@ def remove(
 
 
 @app.command()
-def show() -> None:
+def show(
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+) -> None:
     """List all holdings with book values."""
     portfolio = load_portfolio()
-    render_holdings(portfolio)
+    if output_json:
+        typer.echo(portfolio.model_dump_json(indent=2))
+    else:
+        render_holdings(portfolio)
 
 
 @app.command()
-def value() -> None:
+def value(
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+) -> None:
     """Fetch live prices and show full portfolio valuation."""
     portfolio = load_portfolio()
     if not portfolio.holdings:
@@ -88,4 +95,7 @@ def value() -> None:
         raise typer.Exit(1)
 
     summary = valuate(portfolio, prices)
-    render_portfolio_summary(summary)
+    if output_json:
+        typer.echo(summary.model_dump_json(indent=2))
+    else:
+        render_portfolio_summary(summary)

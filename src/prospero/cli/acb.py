@@ -13,6 +13,7 @@ All data is persisted to ~/.prospero/acb_ledger.json.
 """
 
 import datetime
+import json
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,12 @@ from prospero.display.tables import render_acb_pools, render_capital_gains_repor
 app = typer.Typer(help="ACB tracker for Canadian capital gains tax")
 console = Console()
 err = Console(stderr=True)
+
+
+def _json_default(obj: object) -> str:
+    if isinstance(obj, Decimal):
+        return str(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 def _parse_date(s: str) -> datetime.date:
@@ -388,7 +395,9 @@ def add_sell(
 
 
 @app.command("show")
-def show() -> None:
+def show(
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+) -> None:
     """Show the current ACB pool for all tickers (shares held and average cost basis)."""
     ledger = load_acb_ledger()
     if not ledger.transactions:
@@ -403,7 +412,10 @@ def show() -> None:
     if not pools:
         console.print("[dim]No current holdings — all positions have been closed.[/dim]")
         return
-    render_acb_pools(pools)
+    if output_json:
+        typer.echo(json.dumps([p.model_dump(mode="json") for p in pools], default=_json_default, indent=2))
+    else:
+        render_acb_pools(pools)
 
 
 @app.command("report")
@@ -413,6 +425,7 @@ def report(
         "--year",
         help="Tax year to report on (defaults to the previous calendar year)",
     ),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
 ) -> None:
     """
     Show capital gains and losses for a tax year.
@@ -443,7 +456,19 @@ def report(
         err.print(f"[red]Error: {e}[/red]")
         err.print("[yellow]Tip: this usually means transactions from a prior year are missing from the ledger. Import earlier activity reports first.[/yellow]")
         raise typer.Exit(1)
-    render_capital_gains_report(gains, target_year, total_taxable_cad)
-    if pools:
-        console.print()
-        render_acb_pools(pools, title=f"Year End Holdings & Cost Basis ({target_year})")
+    if output_json:
+        typer.echo(json.dumps(
+            {
+                "year": target_year,
+                "gains": [g.model_dump(mode="json") for g in gains],
+                "pools": [p.model_dump(mode="json") for p in pools],
+                "total_taxable_cad": str(total_taxable_cad) if total_taxable_cad is not None else None,
+            },
+            default=_json_default,
+            indent=2,
+        ))
+    else:
+        render_capital_gains_report(gains, target_year, total_taxable_cad)
+        if pools:
+            console.print()
+            render_acb_pools(pools, title=f"Year End Holdings & Cost Basis ({target_year})")

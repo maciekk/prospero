@@ -86,6 +86,7 @@ def configure(
 @app.command()
 def run(
     every_n: int = typer.Option(5, "--every", help="Show every Nth year in the table"),
+    output_json: bool = typer.Option(False, "--json", help="Output full projection as JSON instead of a table."),
 ) -> None:
     """Run the wealth projection and display results."""
     config = load_planner_config()
@@ -93,7 +94,10 @@ def run(
         console.print("[red]No planner config found. Run 'prospero plan configure' first.[/red]")
         raise typer.Exit(1)
     summary = project(config)
-    render_plan_summary(summary, config, every_n=every_n)
+    if output_json:
+        typer.echo(summary.model_dump_json(indent=2))
+    else:
+        render_plan_summary(summary, config, every_n=every_n)
 
 
 

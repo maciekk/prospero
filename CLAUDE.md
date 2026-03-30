@@ -2,20 +2,29 @@
 
 ## Project Overview
 
-**Prospero** is a financial simulation CLI for portfolio tracking and long-term wealth planning with Canadian (Ontario) tax support. Three main features:
-- **Portfolio tracker** — add/remove holdings, fetch live prices, show gains/losses
-- **Wealth planner** — project net worth year-by-year with salary changes, retirement, FIRE detection, and taxes
-- **ACB tracker** — compute Adjusted Cost Basis and capital gains/losses for Canadian tax filing
+**Prospero** is a financial simulation CLI for portfolio tracking and long-term wealth planning with Canadian (Ontario) tax support. Four tools, each installable as a standalone command:
+
+| Entry point | Subcommand group | Description |
+|---|---|---|
+| `prospero-portfolio` | `prospero portfolio` | Add/remove holdings, fetch live prices, show gains/losses |
+| `prospero-plan` | `prospero plan` | Project net worth year-by-year with salary changes, retirement, FIRE detection, and taxes |
+| `prospero-acb` | `prospero acb` | Compute Adjusted Cost Basis and capital gains/losses for Canadian tax filing |
+| `prospero-tax` | `prospero tax-breakdown` | Canadian income tax breakdown (ON, 2025 base rates) |
+
+All read commands accept `--json` for machine-readable output.
+
+Per-tool documentation: [docs/portfolio.md](docs/portfolio.md), [docs/planner.md](docs/planner.md), [docs/acb.md](docs/acb.md), [docs/tax.md](docs/tax.md).
 
 ## Project Structure
 
 ```
 src/prospero/
 ├── cli/
-│   ├── app.py          Root Typer app — wires subapps, hosts top-level commands (e.g. tax-breakdown)
+│   ├── app.py          Root Typer app — wires subapps, re-registers tax-breakdown command
 │   ├── acb.py          ACB tracker commands (import, add-vest, add-buy, add-sell, show, report)
 │   ├── planner.py      Wealth planner commands (configure, run, show-config)
-│   └── portfolio.py    Portfolio commands (add, remove, show, value)
+│   ├── portfolio.py    Portfolio commands (add, remove, show, value)
+│   └── tax.py          Tax breakdown command — standalone app + re-used by app.py
 ├── models/
 │   ├── acb.py          StockTransaction, TransactionLedger, AcbPoolEntry, CapitalGainEntry
 │   ├── planner.py      PlannerConfig, IncomeChange, YearProjection, PlanSummary
@@ -31,6 +40,12 @@ src/prospero/
 └── display/
     └── tables.py       Rich table rendering for all output
 
+docs/
+├── acb.md
+├── planner.md
+├── portfolio.md
+└── tax.md
+
 tests/
 ├── test_acb_engine.py      ACB pool maintenance, capital gains/losses, cross-year accuracy
 ├── test_acb_csv.py         CSV parsing, error collection, edge cases
@@ -44,6 +59,7 @@ Data is stored in `~/.prospero/`:
 - `planner.toml` — human-editable planner config
 - `portfolio.json` — stock holdings
 - `acb_ledger.json` — ACB transaction history
+- `fx_rates_cache.json` — cached Bank of Canada USD/CAD rates
 
 ## Architecture
 
@@ -62,20 +78,18 @@ Five layers with clear separation:
 - Private helpers prefixed with `_`.
 - Services are pure functions — no side effects, no I/O.
 
-## Adding a New Top-Level Command
+## Adding a New Tool
 
-Add directly to `cli/app.py`:
-```python
-@app.command("my-command")
-def my_command(...) -> None:
-    """Help text."""
-    ...
-```
-
-## Adding a New Subcommand Group
-
-1. Create `src/prospero/cli/new_feature.py` with its own `app = typer.Typer(...)`.
+1. Create `src/prospero/cli/new_feature.py` with its own `app = typer.Typer(...)` and commands.
 2. Wire into `cli/app.py`: `app.add_typer(new_feature.app, name="feature", help="...")`.
+3. Add entry point to `pyproject.toml`: `prospero-feature = "prospero.cli.new_feature:app"`.
+4. Add `docs/new_feature.md` with usage documentation.
+
+To re-expose a standalone app command as a top-level `prospero` shortcut (like `tax-breakdown`):
+```python
+# in cli/app.py
+app.command("my-shortcut")(new_feature_cli.my_command)
+```
 
 ## Non-Obvious Behaviours
 

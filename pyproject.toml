@@ -19,6 +19,10 @@ dev = [
 
 [project.scripts]
 prospero = "prospero.cli.app:app"
+prospero-acb = "prospero.cli.acb:app"
+prospero-plan = "prospero.cli.planner:app"
+prospero-portfolio = "prospero.cli.portfolio:app"
+prospero-tax = "prospero.cli.tax:app"
 
 [build-system]
 requires = ["hatchling"]
