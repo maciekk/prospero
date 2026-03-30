@@ -1,5 +1,9 @@
 # prospero-acb
 
+<img src="../screenshot-MS-report.png" width="100%">
+<img src="../screenshot-acb-ingest.png" width="100%">
+<img src="../screenshot-acb-yearly.png" width="100%">
+
 Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital gains/losses reporting.
 
 Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker form one ACB pool. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the FMV at vest as employment income (reported on your T4), so the ACB equals FMV — only appreciation after vesting is a capital gain on eventual sale.

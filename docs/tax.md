@@ -1,5 +1,7 @@
 # prospero-tax
 
+<img src="../screenshot-tax-breakdown.png" width="43%">
+
 Canadian income tax breakdown — federal + Ontario provincial rates for 2025.
 
 Breaks down federal income tax, Ontario income tax (including surtax), CPP1, CPP2, and EI — showing the amount and effective rate for each component.
