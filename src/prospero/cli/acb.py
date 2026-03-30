@@ -400,14 +400,14 @@ def report(
         err.print(f"[yellow]Could not fetch FX rates ({e}). Showing USD only.[/yellow]")
 
     try:
-        pools, gains, total_taxable_usd, total_taxable_cad = acb_report(
+        pools, gains, _total_taxable_usd, total_taxable_cad = acb_report(
             ledger.transactions, target_year, fx_rates
         )
     except ValueError as e:
         err.print(f"[red]Error: {e}[/red]")
         err.print("[yellow]Tip: this usually means transactions from a prior year are missing from the ledger. Import earlier activity reports first.[/yellow]")
         raise typer.Exit(1)
-    render_capital_gains_report(gains, target_year, total_taxable_usd, total_taxable_cad)
+    render_capital_gains_report(gains, target_year, total_taxable_cad)
     if pools:
         console.print()
         render_acb_pools(pools)

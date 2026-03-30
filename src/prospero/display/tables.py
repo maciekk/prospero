@@ -272,7 +272,6 @@ def render_acb_pools(pools: dict[str, AcbPoolEntry]) -> None:
 def render_capital_gains_report(
     gains: list[CapitalGainEntry],
     year: int,
-    total_taxable_usd: Decimal,
     total_taxable_cad: Decimal | None = None,
 ) -> None:
     """
@@ -295,7 +294,6 @@ def render_capital_gains_report(
     table.add_column("Proceeds (USD)", justify="right")
     table.add_column("ACB Used (USD)", justify="right")
     table.add_column("Gain / Loss (USD)", justify="right")
-    table.add_column("Taxable USD", justify="right")
     if has_cad:
         table.add_column("Rate", justify="right")
         table.add_column("Gain / Loss (CAD)", justify="right")
@@ -309,7 +307,6 @@ def render_capital_gains_report(
             _money(g.proceeds),
             _money(g.acb_used),
             _colored_money(g.capital_gain),
-            _colored_money(g.taxable_gain),
         ]
         if has_cad:
             rate_str = f"{g.exchange_rate:.4f}" if g.exchange_rate else "—"
@@ -317,6 +314,23 @@ def render_capital_gains_report(
             row.append(_colored_money(g.capital_gain_cad) if g.capital_gain_cad is not None else "—")
             row.append(_colored_money(g.taxable_gain_cad) if g.taxable_gain_cad is not None else "—")
         table.add_row(*row)
+
+    # Totals row
+    total_proceeds = sum((g.proceeds for g in gains), Decimal("0"))
+    total_acb_used = sum((g.acb_used for g in gains), Decimal("0"))
+    total_gain = sum((g.capital_gain for g in gains), Decimal("0"))
+    table.add_section()
+    totals_row = [
+        "", "TOTAL", "",
+        _money(total_proceeds),
+        _money(total_acb_used),
+        _colored_money(total_gain),
+    ]
+    if has_cad:
+        total_gain_cad = sum((g.capital_gain_cad for g in gains if g.capital_gain_cad is not None), Decimal("0"))
+        total_taxable_cad_row = sum((g.taxable_gain_cad for g in gains if g.taxable_gain_cad is not None), Decimal("0"))
+        totals_row += ["", _colored_money(total_gain_cad), _colored_money(total_taxable_cad_row)]
+    table.add_row(*totals_row, style="bold")
 
     console.print(table)
     console.print()
@@ -326,7 +340,6 @@ def render_capital_gains_report(
 
     lines = [
         f"Total capital gain / loss (USD):  {_money(total_gain_usd)}",
-        f"Taxable amount 50% (USD):         {_money(total_taxable_usd)}",
     ]
     if has_cad and total_taxable_cad is not None:
         total_gain_cad = sum((g.capital_gain_cad for g in gains if g.capital_gain_cad is not None), Decimal("0"))
@@ -348,4 +361,5 @@ def render_capital_gains_report(
     console.print(Panel(
         "\n".join(lines),
         title=f"[{summary_color}]Tax Year {year} Summary (Canada — ON)[/{summary_color}]",
+        expand=False,
     ))
