@@ -40,21 +40,47 @@ def _parse_date(s: str) -> datetime.date:
         raise typer.BadParameter(f"Expected YYYY-MM-DD, got {s!r}")
 
 
+def _price_cad(tx: "StockTransaction") -> str:
+    """Return a formatted price string in CAD, falling back to USD if rate unavailable."""
+    try:
+        rates = get_rates_for_transactions([tx])
+        rate = rates.get(tx.date)
+        if rate is not None:
+            cad = tx.price_per_share * rate
+            return f"${cad:,.4f} CAD"
+    except Exception:
+        pass
+    return f"${tx.price_per_share:,.4f} USD"
+
+
 def _render_import_preview(transactions: list[StockTransaction]) -> None:
     """Print a summary table of transactions about to be imported."""
+    console.print("[dim]Fetching Bank of Canada USD/CAD rates…[/dim]")
+    try:
+        fx_rates = get_rates_for_transactions(transactions)
+    except Exception:
+        fx_rates = {}
+
     table = Table(title=f"Preview — {len(transactions)} transaction(s)", expand=False)
     table.add_column("Date")
     table.add_column("Type")
     table.add_column("Ticker")
     table.add_column("Quantity", justify="right")
-    table.add_column("Price / Share", justify="right")
+    table.add_column("Price / Share (USD)", justify="right")
+    table.add_column("USD/CAD", justify="right")
+    table.add_column("Price / Share (CAD)", justify="right")
     for tx in sorted(transactions, key=lambda t: t.date):
+        rate = fx_rates.get(tx.date)
+        rate_str = f"{rate:.4f}" if rate is not None else "—"
+        cad_str = f"${tx.price_per_share * rate:,.4f}" if rate is not None else "—"
         table.add_row(
             str(tx.date),
             tx.transaction_type.value,
             tx.ticker,
             str(tx.quantity),
             f"${tx.price_per_share:,.4f}",
+            rate_str,
+            cad_str,
         )
     console.print(table)
 
@@ -170,7 +196,7 @@ def add_opening_balance(
     ledger.transactions.append(tx)
     save_acb_ledger(ledger)
     console.print(
-        f"[green]Opening balance: {tx.quantity} {tx.ticker} @ ${tx.price_per_share} ACB/share on {tx.date}[/green]"
+        f"[green]Opening balance: {tx.quantity} {tx.ticker} @ {_price_cad(tx)} ACB/share on {tx.date}[/green]"
     )
 
 
@@ -200,7 +226,7 @@ def add_vest(
     ledger.transactions.append(tx)
     save_acb_ledger(ledger)
     console.print(
-        f"[green]Vested {tx.quantity} {tx.ticker} @ ${tx.price_per_share} on {tx.date} "
+        f"[green]Vested {tx.quantity} {tx.ticker} @ {_price_cad(tx)} on {tx.date} "
         f"(ACB = FMV)[/green]"
     )
 
@@ -224,7 +250,7 @@ def add_buy(
     ledger.transactions.append(tx)
     save_acb_ledger(ledger)
     console.print(
-        f"[green]Bought {tx.quantity} {tx.ticker} @ ${tx.price_per_share} on {tx.date}[/green]"
+        f"[green]Bought {tx.quantity} {tx.ticker} @ {_price_cad(tx)} on {tx.date}[/green]"
     )
 
 
@@ -260,7 +286,7 @@ def add_sell(
     ledger.transactions.append(tx)
     save_acb_ledger(ledger)
     console.print(
-        f"[green]Sold {tx.quantity} {tx.ticker} @ ${tx.price_per_share} on {tx.date}[/green]"
+        f"[green]Sold {tx.quantity} {tx.ticker} @ {_price_cad(tx)} on {tx.date}[/green]"
     )
 
 

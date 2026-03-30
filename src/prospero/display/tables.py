@@ -248,17 +248,21 @@ def render_portfolio_summary(summary: PortfolioSummary) -> None:
 
 def render_acb_pools(pools: dict[str, AcbPoolEntry]) -> None:
     """Render a table of current ACB pools — one row per ticker with remaining shares."""
+    has_cad = any(e.acb_per_share_cad is not None for e in pools.values())
+    acb_col = "ACB / Share (CAD)" if has_cad else "ACB / Share (USD)"
+
     table = Table(title="Current ACB Pools", expand=False)
     table.add_column("Ticker")
     table.add_column("Shares", justify="right")
-    table.add_column("ACB / Share", justify="right")
-    table.add_column("Total ACB", justify="right")
+    table.add_column(acb_col, justify="right")
+    table.add_column("Total ACB (USD)", justify="right")
 
     for entry in sorted(pools.values(), key=lambda e: e.ticker):
+        acb_display = _money(entry.acb_per_share_cad) if has_cad and entry.acb_per_share_cad is not None else _money(entry.acb_per_share)
         table.add_row(
             entry.ticker,
             str(entry.shares),
-            _money(entry.acb_per_share),
+            acb_display,
             _money(entry.total_acb),
         )
 

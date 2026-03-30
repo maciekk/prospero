@@ -153,7 +153,7 @@ def compute_capital_gains_cad(
     transactions: list[StockTransaction],
     year: int,
     fx_rates: dict,  # dict[date, Decimal] — date -> USD/CAD rate
-) -> list[CapitalGainEntry]:
+) -> tuple[list[CapitalGainEntry], dict[str, tuple[Decimal, Decimal]]]:
     """
     Replay the full transaction history and return CapitalGainEntry objects for
     every SELL in `year`, with CAD fields populated using Bank of Canada rates.
@@ -175,6 +175,9 @@ def compute_capital_gains_cad(
 
     Transaction dates missing from fx_rates are skipped for CAD computation
     (the returned entry will have None CAD fields for those sells).
+
+    Returns a tuple of (gains, final_cad_pools) where final_cad_pools maps ticker
+    to (shares, total_acb_cad) — the CAD pool state after replaying all transactions.
     """
     gains: list[CapitalGainEntry] = []
     # USD pool: (total_shares, total_acb_usd)
@@ -233,7 +236,7 @@ def compute_capital_gains_cad(
                     taxable_gain_cad=cad_taxable,
                 ))
 
-    return gains
+    return gains, cad_pools
 
 
 def acb_report(
@@ -260,7 +263,15 @@ def acb_report(
     """
     pools = compute_acb_pools(transactions)
     if fx_rates is not None:
-        gains = compute_capital_gains_cad(transactions, year, fx_rates)
+        gains, final_cad_pools = compute_capital_gains_cad(transactions, year, fx_rates)
+        for ticker, entry in pools.items():
+            if ticker in final_cad_pools:
+                cad_shares, cad_acb = final_cad_pools[ticker]
+                if cad_shares > 0:
+                    pools[ticker] = entry.model_copy(update={
+                        "total_acb_cad": cad_acb.quantize(_TWO_PLACES, ROUND_HALF_UP),
+                        "acb_per_share_cad": (cad_acb / cad_shares).quantize(_EIGHT_PLACES, ROUND_HALF_UP),
+                    })
     else:
         gains = compute_capital_gains(transactions, year)
 

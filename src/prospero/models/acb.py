@@ -53,9 +53,14 @@ class AcbPoolEntry(BaseModel):
     """
 
     ticker: str
-    shares: Decimal       # Total shares currently held
-    total_acb: Decimal    # Total adjusted cost basis of all shares held
-    acb_per_share: Decimal  # total_acb / shares — used when computing capital gains on sale
+    shares: Decimal         # Total shares currently held
+    total_acb: Decimal      # Total adjusted cost basis of all shares held (USD)
+    acb_per_share: Decimal  # total_acb / shares in USD — used when computing capital gains on sale
+
+    # CAD equivalents — populated when FX rates are available (None otherwise).
+    # Each acquisition's cost is converted at its own acquisition-date rate, not today's rate.
+    total_acb_cad: Optional[Decimal] = None
+    acb_per_share_cad: Optional[Decimal] = None
 
 
 class CapitalGainEntry(BaseModel):
