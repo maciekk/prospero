@@ -185,52 +185,6 @@ The report shows proceeds, ACB used, and capital gain/loss per sale, with the 50
 
 Data is stored in `~/.prospero/acb_ledger.json`. Broker CSVs vary — massage your export to match the format above.
 
-#### Manually verifying the report
-
-After running `prospero acb report`, cross-check against your broker statement using these steps:
-
-**1. Transaction count**
-
-Count the vest/release rows and sale rows in your broker's activity report. The number of SELL rows in `acb report` and VEST rows visible in `acb show` should match. A mismatch means a transaction was missed or duplicated.
-
-**2. Proceeds per sale**
-
-For each row in the capital gains report, confirm **Shares Sold** and **Proceeds** against your trade confirmation:
-
-- Shares Sold should equal the "Quantity" on the trade confirm
-- Proceeds should equal `quantity × price per share` from the confirm (the tool uses the price in your CSV, which should be the gross sale price; if your broker deducted commissions from proceeds, the tool's number will be slightly higher)
-
-**3. Manually reconstruct ACB Used for one sale**
-
-Pick one SELL row and replay the acquisitions before it in chronological order:
-
-1. List every VEST/BUY before that date with `(quantity, price_per_share)`
-2. For any prior SELLs, remove the proportional ACB: `acb_removed = shares_sold × (running_total_acb / running_total_shares)`
-3. After replaying: `acb_per_share = total_acb / total_shares`
-4. `ACB Used = shares_sold × acb_per_share`
-
-The "ACB Used" column in the report should match to the cent.
-
-**4. Running share count**
-
-After the report, `prospero acb show` displays current ACB pools. For each ticker, confirm:
-
-```
-shares in pool = sum(all VESTs + BUYs) − sum(all SELLs)
-```
-
-This should match your current account position at the broker.
-
-**5. CAD gain sanity check (if using `--cad`)**
-
-For each row, `Gain (CAD) ≈ Gain (USD) × exchange_rate_on_sell_date`. This is approximate because the ACB side uses historical rates (one per vest date), while proceeds use the sell-date rate. A divergence larger than ~5% usually means a vest date was missing an FX rate and the tool fell back to USD cost. Verify the "Rate" column against the [Bank of Canada daily rates](https://www.bankofcanada.ca/rates/exchange/daily-exchange-rates/) for that date.
-
-**6. Schedule 3 — T1 filing**
-
-The "Taxable amount 50% (CAD)" in the summary panel is what goes on **Schedule 3, line 19900** of your T1. Confirm it equals `Total capital gain / loss (CAD) × 0.50`.
-
-*For reference only — not professional tax advice.*
-
 ## Data Storage
 
 Portfolio and planner config are stored in `~/.prospero/`:
