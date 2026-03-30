@@ -116,12 +116,11 @@ If your broker is Morgan Stanley, unpack the Activity Report zip and point `impo
 > 1. Log in to MS Stockplan Connect → Reports → Vested Share Holdings
 > 2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024 if importing 2025 activity)
 > 3. Note *Number of Shares* and *Acquisition Value* for your ticker
-> 4. Compute ACB per share = Acquisition Value ÷ Number of Shares
 >    *(MS defines Acquisition Value as FMV at vest × shares held, which equals total ACB for RSUs)*
-> 5. Run:
+> 4. Run:
 >    ```bash
 >    prospero acb add-opening-balance --ticker GOOG --date 2024-12-31 \
->      --shares <Number of Shares> --acb-per-share <Acquisition Value ÷ Shares>
+>      --shares <Number of Shares> --opening-acb-usd <Acquisition Value>
 >    ```
 
 ```bash

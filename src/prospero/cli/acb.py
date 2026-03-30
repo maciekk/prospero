@@ -227,7 +227,7 @@ def add_opening_balance(
     ticker: str = typer.Option(..., help="Ticker symbol (e.g. GOOG)"),
     date_str: str = typer.Option(..., "--date", help="Date of the opening balance (YYYY-MM-DD) — use the day before your first imported transaction"),
     shares: float = typer.Option(..., "--shares", help="Total shares held as of that date"),
-    acb_per_share: float = typer.Option(..., "--acb-per-share", help="Average cost basis per share (from your broker's cost basis statement)"),
+    opening_acb_usd: float = typer.Option(..., "--opening-acb-usd", help="Total adjusted cost basis in USD (e.g. Acquisition Value from your broker's cost basis statement)"),
 ) -> None:
     """
     Seed the ACB pool with shares held before your transaction history begins.
@@ -241,7 +241,7 @@ def add_opening_balance(
         transaction_type=TransactionType.OPENING,
         date=_parse_date(date_str),
         quantity=Decimal(str(shares)),
-        price_per_share=Decimal(str(acb_per_share)),
+        price_per_share=Decimal(str(opening_acb_usd)) / Decimal(str(shares)),
     )
     ledger = load_acb_ledger()
     ledger.transactions.append(tx)
