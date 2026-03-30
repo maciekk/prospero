@@ -1,11 +1,11 @@
 # prospero-acb
 
-<img src="screenshot-MS-report.png" width="100%">
+Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital gains/losses reporting.
+
 <img src="screenshot-acb-ingest.png" width="100%">
 <img src="screenshot-acb-yearly.png" width="100%">
 
-Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital gains/losses reporting.
-
+## Background
 Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker form one ACB pool. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the FMV at vest as employment income (reported on your T4), so the ACB equals FMV — only appreciation after vesting is a capital gain on eventual sale.
 
 ## Workflow
@@ -19,6 +19,12 @@ The `prospero acb` subcommand group works identically.
 
 ## Morgan Stanley Activity Report
 
+Needed settings on export:
+
+<img src="screenshot-MS-report.png" width="60%">
+
+Key: **USD** currency, to avoid crappy (fixed single day) currency conversions.
+
 Unpack the Activity Report zip and point `import-ms` at the folder — no manual CSV prep needed.
 
 > [!NOTE]
@@ -26,17 +32,18 @@ Unpack the Activity Report zip and point `import-ms` at the folder — no manual
 >
 > 1. Log in to MS Stockplan Connect → Reports → Vested Share Holdings
 > 2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024 if importing 2025 activity)
-> 3. Note *Number of Shares* and *Acquisition Value* for your ticker
+> 3. Make sure to specify **USD** currency (native)
+> 4. Note *Number of Shares* and *Acquisition Value* for your ticker
 >    *(MS defines Acquisition Value as FMV at vest × shares held, which equals total ACB for RSUs)*
-> 4. Run:
+> 5. Run:
 >    ```bash
 >    prospero-acb add-opening-balance --ticker GOOG --date 2024-12-31 \
 >      --shares <Number of Shares> --opening-acb-usd <Acquisition Value>
 >    ```
 
 ```bash
-prospero-acb import-ms --dir ~/Downloads/MS-activity-report-2025 --ticker GOOG --dry-run
-prospero-acb import-ms --dir ~/Downloads/MS-activity-report-2025 --ticker GOOG
+prospero-acb import-ms --dir data-sample/complete/ --ticker GOOG --dry-run
+prospero-acb import-ms --dir data-sample/complete/ --ticker GOOG
 ```
 
 The ticker must be supplied as it is not included in the MS files. `--dry-run` previews without saving.
