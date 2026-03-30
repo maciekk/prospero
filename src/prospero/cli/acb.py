@@ -66,36 +66,42 @@ def _total_acb_cad(tx: "StockTransaction") -> str:
     return f"${tx.quantity * tx.price_per_share:,.2f} USD"
 
 
-def _compute_sell_acb_used(
+def _compute_preview_data(
     new_transactions: list[StockTransaction],
-) -> dict[int, Decimal]:
+) -> tuple[dict[int, Decimal], dict[int, Decimal]]:
     """
-    Replay the existing ledger plus new_transactions and return a mapping of
-    id(tx) -> total_acb_used_usd for every SELL in new_transactions.
+    Replay the existing ledger plus new_transactions and return two mappings
+    keyed by id(tx) for every transaction in new_transactions:
+
+        acb_used:      total ACB consumed (SELL rows only; absent for other types)
+        pool_acb_after: total pool ACB for that ticker after the transaction
 
     total_acb_used = shares_sold × (total_acb / total_shares) at time of sale.
-
-    This lets the preview table show the ACB consumed for each sale before
-    the import is committed.
     """
     ledger = load_acb_ledger()
     new_ids = {id(tx) for tx in new_transactions}
     all_txs = sorted(ledger.transactions + new_transactions, key=lambda t: t.date)
 
     pools: dict[str, tuple[Decimal, Decimal]] = {}  # ticker -> (shares, total_acb)
-    result: dict[int, Decimal] = {}
+    acb_used: dict[int, Decimal] = {}
+    pool_acb_after: dict[int, Decimal] = {}
 
     for tx in all_txs:
         shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
         if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
-            pools[tx.ticker] = (shares + tx.quantity, acb + tx.quantity * tx.price_per_share)
-        elif tx.transaction_type == TransactionType.SELL:
-            acb_used = (tx.quantity * acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
+            new_acb = acb + tx.quantity * tx.price_per_share
+            pools[tx.ticker] = (shares + tx.quantity, new_acb)
             if id(tx) in new_ids:
-                result[id(tx)] = acb_used
-            pools[tx.ticker] = (shares - tx.quantity, acb - acb_used)
+                pool_acb_after[id(tx)] = new_acb.quantize(Decimal("0.01"))
+        elif tx.transaction_type == TransactionType.SELL:
+            used = (tx.quantity * acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
+            new_acb = acb - used
+            pools[tx.ticker] = (shares - tx.quantity, new_acb)
+            if id(tx) in new_ids:
+                acb_used[id(tx)] = used
+                pool_acb_after[id(tx)] = new_acb.quantize(Decimal("0.01"))
 
-    return result
+    return acb_used, pool_acb_after
 
 
 def _render_import_preview(transactions: list[StockTransaction]) -> None:
@@ -106,7 +112,7 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
     except Exception:
         fx_rates = {}
 
-    sell_acb = _compute_sell_acb_used(transactions)
+    acb_used_map, pool_acb_after_map = _compute_preview_data(transactions)
 
     table = Table(title=f"Preview — {len(transactions)} transaction(s)", expand=False)
     table.add_column("Date")
@@ -115,14 +121,17 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
     table.add_column("Quantity", justify="right")
     table.add_column("Price / Share (USD)", justify="right")
     table.add_column("ACB Used (USD)", justify="right")
+    table.add_column("Pool ACB (USD)", justify="right")
     table.add_column("USD/CAD", justify="right")
     table.add_column("Price / Share (CAD)", justify="right")
     for tx in sorted(transactions, key=lambda t: t.date):
         rate = fx_rates.get(tx.date)
         rate_str = f"{rate:.4f}" if rate is not None else "—"
         cad_str = f"${tx.price_per_share * rate:,.4f}" if rate is not None else "—"
-        acb_used = sell_acb.get(id(tx))
+        acb_used = acb_used_map.get(id(tx))
         acb_str = f"${acb_used:,.2f}" if acb_used is not None else "—"
+        pool_acb = pool_acb_after_map.get(id(tx))
+        pool_str = f"${pool_acb:,.2f}" if pool_acb is not None else "—"
         table.add_row(
             str(tx.date),
             tx.transaction_type.value,
@@ -130,6 +139,7 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
             str(tx.quantity),
             f"${tx.price_per_share:,.4f}",
             acb_str,
+            pool_str,
             rate_str,
             cad_str,
         )
