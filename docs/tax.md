@@ -1,6 +1,6 @@
 # prospero-tax
 
-<img src="../screenshot-tax-breakdown.png" width="43%">
+<img src="screenshot-tax-breakdown.png" width="43%">
 
 Canadian income tax breakdown — federal + Ontario provincial rates for 2025.
 

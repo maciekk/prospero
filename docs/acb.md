@@ -1,8 +1,8 @@
 # prospero-acb
 
-<img src="../screenshot-MS-report.png" width="100%">
-<img src="../screenshot-acb-ingest.png" width="100%">
-<img src="../screenshot-acb-yearly.png" width="100%">
+<img src="screenshot-MS-report.png" width="100%">
+<img src="screenshot-acb-ingest.png" width="100%">
+<img src="screenshot-acb-yearly.png" width="100%">
 
 Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital gains/losses reporting.
 

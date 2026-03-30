@@ -1,7 +1,7 @@
 # prospero-plan
 
-<img src="../screenshot-configure.png" width="69%">
-<img src="../screenshot-plan-table.png" width="100%">
+<img src="screenshot-configure.png" width="69%">
+<img src="screenshot-plan-table.png" width="100%">
 
 Long-term wealth planner — project net worth year-by-year with salary changes, retirement modelling, FIRE detection, and Canadian taxes.
 
