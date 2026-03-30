@@ -69,13 +69,16 @@ def _total_acb_cad(tx: "StockTransaction") -> str:
 
 def _compute_preview_data(
     new_transactions: list[StockTransaction],
-) -> tuple[dict[int, Decimal], dict[int, Decimal]]:
+) -> tuple[dict[int, Decimal], dict[int, Decimal], dict[int, Decimal], dict[int, Decimal | None]]:
     """
-    Replay the existing ledger plus new_transactions and return two mappings
+    Replay the existing ledger plus new_transactions and return four mappings
     keyed by id(tx) for every transaction in new_transactions:
 
-        acb_used:      total ACB consumed (SELL rows only; absent for other types)
-        pool_acb_after: total pool ACB for that ticker after the transaction
+        acb_used:           total ACB consumed (SELL rows only; absent for other types)
+        pool_acb_after:     total pool ACB (USD) for that ticker after the transaction
+        pool_units_after:   total shares held for that ticker after the transaction
+        pool_acb_cad_after: total pool ACB (CAD) for that ticker after the transaction,
+                            or None if the FX rate for that date is unavailable
 
     total_acb_used = shares_sold × (total_acb / total_shares) at time of sale.
     """
@@ -83,26 +86,48 @@ def _compute_preview_data(
     new_ids = {id(tx) for tx in new_transactions}
     all_txs = sorted(ledger.transactions + new_transactions, key=lambda t: t.date)
 
-    pools: dict[str, tuple[Decimal, Decimal]] = {}  # ticker -> (shares, total_acb)
+    try:
+        fx_rates = get_rates_for_transactions(all_txs)
+    except Exception:
+        fx_rates = {}
+
+    pools: dict[str, tuple[Decimal, Decimal]] = {}      # ticker -> (shares, total_acb_usd)
+    cad_pools: dict[str, tuple[Decimal, Decimal]] = {}  # ticker -> (shares, total_acb_cad)
     acb_used: dict[int, Decimal] = {}
     pool_acb_after: dict[int, Decimal] = {}
+    pool_units_after: dict[int, Decimal] = {}
+    pool_acb_cad_after: dict[int, Decimal | None] = {}
 
     for tx in all_txs:
         shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        _, cad_acb = cad_pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        rate = fx_rates.get(tx.date)
         if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
-            new_acb = acb + tx.quantity * tx.price_per_share
-            pools[tx.ticker] = (shares + tx.quantity, new_acb)
+            cost = tx.quantity * tx.price_per_share
+            new_shares = shares + tx.quantity
+            new_acb = acb + cost
+            new_cad_acb = cad_acb + cost * rate if rate is not None else None
+            pools[tx.ticker] = (new_shares, new_acb)
+            cad_pools[tx.ticker] = (new_shares, new_cad_acb if new_cad_acb is not None else cad_acb + cost)
             if id(tx) in new_ids:
                 pool_acb_after[id(tx)] = new_acb.quantize(Decimal("0.01"))
+                pool_units_after[id(tx)] = new_shares
+                pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01")) if new_cad_acb is not None else None
         elif tx.transaction_type == TransactionType.SELL:
             used = (tx.quantity * acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
+            cad_used = (tx.quantity * cad_acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
+            new_shares = shares - tx.quantity
             new_acb = acb - used
-            pools[tx.ticker] = (shares - tx.quantity, new_acb)
+            new_cad_acb = cad_acb - cad_used
+            pools[tx.ticker] = (new_shares, new_acb)
+            cad_pools[tx.ticker] = (new_shares, new_cad_acb)
             if id(tx) in new_ids:
                 acb_used[id(tx)] = used
                 pool_acb_after[id(tx)] = new_acb.quantize(Decimal("0.01"))
+                pool_units_after[id(tx)] = new_shares
+                pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01"))
 
-    return acb_used, pool_acb_after
+    return acb_used, pool_acb_after, pool_units_after, pool_acb_cad_after
 
 
 def _render_import_preview(transactions: list[StockTransaction]) -> None:
@@ -113,7 +138,7 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
     except Exception:
         fx_rates = {}
 
-    acb_used_map, pool_acb_after_map = _compute_preview_data(transactions)
+    acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map = _compute_preview_data(transactions)
 
     def _ch(label: str) -> Text:
         return Text(label, justify="center")
@@ -123,24 +148,31 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
     table.add_column("Type")
     table.add_column("Ticker")
     table.add_column(_ch("Units"), justify="right")
+    table.add_column(_ch("Total\nUnits"), justify="right")
     table.add_column(_ch("Price\n(USD)"), justify="right")
     table.add_column(_ch("ACB Used\n(USD)"), justify="right")
     table.add_column(_ch("Total ACB\n(USD)"), justify="right")
     table.add_column(_ch("Exchange\n(USD/CAD)"), justify="right")
-    table.add_column(_ch("Price\n(CAD)"), justify="right")
+    table.add_column(_ch("Total ACB\n(CAD)"), justify="right")
     for tx in sorted(transactions, key=lambda t: t.date):
         rate = fx_rates.get(tx.date)
         rate_str = f"{rate:.4f}" if rate is not None else "—"
-        cad_str = f"${tx.price_per_share * rate:,.4f}" if rate is not None else "—"
         acb_used = acb_used_map.get(id(tx))
         acb_str = f"${acb_used:,.2f}" if acb_used is not None else "—"
         pool_acb = pool_acb_after_map.get(id(tx))
         pool_str = f"${pool_acb:,.2f}" if pool_acb is not None else "—"
+        pool_units = pool_units_after_map.get(id(tx))
+        units_str = str(pool_units) if pool_units is not None else "—"
+        pool_acb_cad = pool_acb_cad_after_map.get(id(tx))
+        cad_str = f"${pool_acb_cad:,.2f}" if pool_acb_cad is not None else "—"
+        is_sell = tx.transaction_type == TransactionType.SELL
+        qty_str = f"-{tx.quantity}" if is_sell else str(tx.quantity)
         table.add_row(
             str(tx.date),
             tx.transaction_type.value,
             tx.ticker,
-            str(tx.quantity),
+            qty_str,
+            units_str,
             f"${tx.price_per_share:,.2f}",
             acb_str,
             pool_str,
