@@ -461,7 +461,7 @@ def report(
             {
                 "year": target_year,
                 "gains": [g.model_dump(mode="json") for g in gains],
-                "pools": [p.model_dump(mode="json") for p in pools],
+                "holdings": [p.model_dump(mode="json") for p in pools],
                 "total_taxable_cad": str(total_taxable_cad) if total_taxable_cad is not None else None,
             },
             default=_json_default,

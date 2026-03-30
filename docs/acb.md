@@ -2,18 +2,28 @@
 
 Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital gains/losses reporting.
 
-<img src="screenshot-acb-ingest.png" width="100%">
-<img src="screenshot-acb-yearly.png" width="100%">
+<img src="screenshot-acb-ingest.png" width="80%">
+<img src="screenshot-acb-yearly.png" width="80%">
 
 ## Background
-Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker form one ACB pool. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the FMV at vest as employment income (reported on your T4), so the ACB equals FMV — only appreciation after vesting is a capital gain on eventual sale.
+
+Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker are tracked together as a single cost basis position. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the FMV at vest as employment income (reported on your T4), so ACB equals FMV — only appreciation after vesting becomes a capital gain on sale.
+
+> [!IMPORTANT]
+> **Import your full history, not one year at a time.** Because each sale's ACB depends on all prior acquisitions and dispositions, the ledger must contain every transaction from the beginning. Use `prospero-acb report --year YYYY` to slice out the capital gains for any specific tax year.
+
+> [!IMPORTANT]
+> **USD-denominated grants only.** This tool assumes stock prices and proceeds are in USD (the currency used by most US-listed RSU grants). Bank of Canada rates are fetched to convert to CAD for reporting. If your grants are denominated in another currency, the code will need to be updated.
+
+> [!WARNING]
+> **Stock splits are not supported.** The ACB calculation does not account for split adjustments. Export only split-free history, or manually normalize quantities and prices before importing.
 
 ## Workflow
 
-1. Import your broker's transaction history (or enter events manually)
+1. Import your full transaction history (or enter events manually)
    - Transactions are saved to `~/.prospero/acb_ledger.json`
-   - If the ledger gets into a bad state, just delete that file and re-import
-2. Run `prospero-acb report` for capital gains/losses, or `prospero-acb show` for current ACB pools
+   - If the ledger gets into a bad state, delete that file and re-import
+2. Run `prospero-acb report --year YYYY` for capital gains/losses, or `prospero-acb show` for your current cost basis
 
 The `prospero acb` subcommand group works identically.
 
@@ -28,10 +38,10 @@ Key: **USD** currency, to avoid crappy (fixed single day) currency conversions.
 Unpack the Activity Report zip and point `import-ms` at the folder — no manual CSV prep needed.
 
 > [!NOTE]
-> If you held shares before your earliest activity report (common when importing only the current tax year), the import will fail with an oversell error. Seed the ledger first:
+> If you held shares before your earliest activity report (common when importing only recent years), the import will fail with an oversell error. Seed the ledger first:
 >
 > 1. Log in to MS Stockplan Connect → Reports → Vested Share Holdings
-> 2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024 if importing 2025 activity)
+> 2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024 if importing from 2025 onward)
 > 3. Make sure to specify **USD** currency (native)
 > 4. Note *Number of Shares* and *Acquisition Value* for your ticker
 >    *(MS defines Acquisition Value as FMV at vest × shares held, which equals total ACB for RSUs)*
@@ -65,7 +75,7 @@ date,type,ticker,quantity,price
 | `type` | `vest` / `buy` / `sell` | Case-insensitive |
 | `ticker` | e.g. `AAPL` | Uppercased automatically |
 | `quantity` | positive number | Shares involved |
-| `price` | price per share | FMV for vest; purchase price for buy; proceeds for sell |
+| `price` | price per share in USD | FMV for vest; purchase price for buy; proceeds for sell |
 
 ```bash
 # Preview without saving
@@ -95,7 +105,7 @@ prospero-acb add-sell --ticker AAPL --date 2024-06-15 --quantity 20 --price 210.
 ## Reporting
 
 ```bash
-# Show current ACB pools (remaining shares and average cost per ticker)
+# Show current cost basis for all tickers (shares held and average cost)
 prospero-acb show
 
 # Capital gains/losses for a tax year (defaults to the previous calendar year)
@@ -103,7 +113,7 @@ prospero-acb report
 prospero-acb report --year 2024
 ```
 
-The report shows proceeds, ACB used, and capital gain/loss per sale, with the 50% inclusion amount (the portion added to taxable income). It also notes the superficial loss rule and capital loss carryover rules. Bank of Canada USD/CAD rates are fetched automatically to show CAD amounts.
+The report shows proceeds, ACB used, and capital gain/loss per sale, with the 50% inclusion amount (the taxable portion). It also notes the superficial loss rule and capital loss carryover rules. Bank of Canada USD/CAD rates are fetched automatically.
 
 ## JSON output
 
@@ -112,7 +122,7 @@ prospero-acb show --json
 prospero-acb report --year 2024 --json
 ```
 
-`report --json` outputs `{ "year", "gains": [...], "pools": [...], "total_taxable_cad" }`.
+`report --json` outputs `{ "year", "gains": [...], "holdings": [...], "total_taxable_cad" }`.
 
 ## Data storage
 
