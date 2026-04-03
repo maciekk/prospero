@@ -63,14 +63,11 @@ def _make_gains_with_cad() -> list[CapitalGainEntry]:
             ticker="GOOG",
             shares_sold=Decimal("10"),
             proceeds=Decimal("2000.00"),
-            acb_used=Decimal("1500.00"),
-            capital_gain=Decimal("500.00"),
-            taxable_gain=Decimal("250.00"),
             exchange_rate=Decimal("1.3600"),
             proceeds_cad=Decimal("2720.00"),
-            acb_used_cad=Decimal("2040.00"),
-            capital_gain_cad=Decimal("680.00"),
-            taxable_gain_cad=Decimal("340.00"),
+            acb_used=Decimal("2040.00"),
+            capital_gain=Decimal("680.00"),
+            taxable_gain=Decimal("340.00"),
         )
     ]
 
@@ -209,14 +206,13 @@ def test_pdf_import_preview(tmp_path: Path) -> None:
         ),
     ]
     tx_ids = [id(t) for t in transactions]
-    acb_used_map = {tx_ids[1]: Decimal("1700.00")}
-    pool_acb_after_map = {tx_ids[0]: Decimal("8500.00"), tx_ids[1]: Decimal("5100.00")}
+    acb_used_cad_map = {tx_ids[1]: Decimal("1700.00")}
     pool_units_after_map = {tx_ids[0]: Decimal("50"), tx_ids[1]: Decimal("30")}
-    pool_acb_cad_after_map = {tx_ids[0]: None, tx_ids[1]: None}
+    pool_acb_cad_after_map = {tx_ids[0]: Decimal("8500.00"), tx_ids[1]: Decimal("5100.00")}
     fx_rates = {}
 
     out = tmp_path / "import.pdf"
-    pdf_import_preview(transactions, out, fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map)
+    pdf_import_preview(transactions, out, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
     assert out.exists() and out.stat().st_size > 0
     assert _is_pdf(out)
 

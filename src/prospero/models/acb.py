@@ -49,18 +49,17 @@ class AcbPoolEntry(BaseModel):
 
     Canada uses the identical-shares (average cost) method: all shares of the same
     ticker form one pool. The ACB per share is the weighted average cost of all shares
-    currently held.
+    currently held, tracked in CAD.
+
+    ACB is always tracked in CAD: each acquisition's USD cost is converted to CAD at
+    the Bank of Canada rate for that acquisition date, then accumulated into the pool.
+    Fields are None when FX rates are unavailable for any acquisition in the pool.
     """
 
     ticker: str
-    shares: Decimal         # Total shares currently held
-    total_acb: Decimal      # Total adjusted cost basis of all shares held (USD)
-    acb_per_share: Decimal  # total_acb / shares in USD — used when computing capital gains on sale
-
-    # CAD equivalents — populated when FX rates are available (None otherwise).
-    # Each acquisition's cost is converted at its own acquisition-date rate, not today's rate.
-    total_acb_cad: Optional[Decimal] = None
-    acb_per_share_cad: Optional[Decimal] = None
+    shares: Decimal                          # Total shares currently held
+    total_acb: Optional[Decimal] = None      # Total ACB in CAD
+    acb_per_share: Optional[Decimal] = None  # total_acb / shares in CAD
 
 
 class CapitalGainEntry(BaseModel):
@@ -68,24 +67,21 @@ class CapitalGainEntry(BaseModel):
     Computed record of one sell event and its capital gain/loss. Never stored —
     always derived from the transaction ledger.
 
-    capital_gain  = proceeds - acb_used  (positive = gain, negative = loss)
-    taxable_gain  = capital_gain * 0.50  (50% inclusion rate, CRA 2024)
+    All monetary amounts are in CAD:
+      capital_gain  = proceeds_cad - acb_used  (positive = gain, negative = loss)
+      taxable_gain  = capital_gain * 0.50       (50% inclusion rate, CRA 2024)
+
+    proceeds (USD) and exchange_rate are kept for reference / display.
+    CAD fields are None when FX rates are unavailable for this transaction or any
+    prior acquisition that contributes to the ACB pool.
     """
 
     date: date
     ticker: str
     shares_sold: Decimal
-    proceeds: Decimal      # Total proceeds from this sale in USD (shares_sold * price_per_share)
-    acb_used: Decimal      # ACB of the sold shares in USD (shares_sold * pool_acb_per_share at time of sale)
-    capital_gain: Decimal  # proceeds - acb_used in USD; positive = gain, negative = loss
-    taxable_gain: Decimal  # capital_gain * 0.50 in USD
-
-    # CAD equivalents — populated when FX rates are available (None otherwise).
-    # The CAD ACB is computed using each acquisition's own vest-date rate, NOT the
-    # sell-date rate — so these cannot be derived by simply multiplying the USD values
-    # by a single exchange rate. See acb_engine.compute_capital_gains_cad().
-    exchange_rate: Optional[Decimal] = None   # USD/CAD rate on the sell date
-    proceeds_cad: Optional[Decimal] = None
-    acb_used_cad: Optional[Decimal] = None
-    capital_gain_cad: Optional[Decimal] = None
-    taxable_gain_cad: Optional[Decimal] = None
+    proceeds: Decimal                          # Total proceeds in USD (shares_sold * price_per_share)
+    exchange_rate: Optional[Decimal] = None    # USD/CAD rate on the sell date
+    proceeds_cad: Optional[Decimal] = None     # proceeds * exchange_rate
+    acb_used: Optional[Decimal] = None         # CAD ACB of the sold shares
+    capital_gain: Optional[Decimal] = None     # proceeds_cad - acb_used in CAD
+    taxable_gain: Optional[Decimal] = None     # capital_gain * 0.50 in CAD

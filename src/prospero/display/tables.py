@@ -248,23 +248,16 @@ def render_portfolio_summary(summary: PortfolioSummary) -> None:
 
 def render_acb_pools(pools: dict[str, AcbPoolEntry], title: str = "Holdings & Cost Basis") -> None:
     """Render a table of ACB pools — one row per ticker with remaining shares."""
-    has_cad = any(e.acb_per_share_cad is not None for e in pools.values())
-    acb_col = "ACB / Share\n(CAD)" if has_cad else "ACB / Share\n(USD)"
-
     table = Table(title=title, expand=False)
     table.add_column(Text("Ticker", justify="center"))
     table.add_column(Text("Shares", justify="center"), justify="right")
-    table.add_column(Text(acb_col, justify="center"), justify="right")
-    table.add_column(Text("Total ACB\n(USD)", justify="center"), justify="right")
+    table.add_column(Text("ACB / Share\n(CAD)", justify="center"), justify="right")
+    table.add_column(Text("Total ACB\n(CAD)", justify="center"), justify="right")
 
     for entry in sorted(pools.values(), key=lambda e: e.ticker):
-        acb_display = _money(entry.acb_per_share_cad) if has_cad and entry.acb_per_share_cad is not None else _money(entry.acb_per_share)
-        table.add_row(
-            entry.ticker,
-            str(entry.shares),
-            acb_display,
-            _money(entry.total_acb),
-        )
+        acb_ps = _money(entry.acb_per_share) if entry.acb_per_share is not None else "—"
+        total_acb = _money(entry.total_acb) if entry.total_acb is not None else "—"
+        table.add_row(entry.ticker, str(entry.shares), acb_ps, total_acb)
 
     console.print(table)
 
@@ -278,14 +271,14 @@ def render_capital_gains_report(
     Render a capital gains/losses report for a tax year.
 
     Shows one row per disposition, coloured green (gain) or red (loss), followed by
-    a summary panel with totals and Canadian tax notes. When CAD fields are present
-    on the gain entries, CAD columns are shown alongside USD.
+    a summary panel with totals and Canadian tax notes. All ACB-derived amounts are in
+    CAD; USD proceeds and exchange rate are shown for reference.
     """
     if not gains:
         console.print(f"[dim]No dispositions recorded for {year}.[/dim]")
         return
 
-    has_cad = any(g.capital_gain_cad is not None for g in gains)
+    has_cad = any(g.capital_gain is not None for g in gains)
 
     def _ch(label: str) -> Text:
         """Centered column header for use with right-justified data columns."""
@@ -296,65 +289,64 @@ def render_capital_gains_report(
     table.add_column("Ticker")
     table.add_column(_ch("Shares\nSold"), justify="right", max_width=8)
     table.add_column(_ch("Proceeds\n(USD)"), justify="right")
-    table.add_column(_ch("ACB Used\n(USD)"), justify="right")
-    table.add_column(_ch("Gain / Loss\n(USD)"), justify="right")
     if has_cad:
         table.add_column(_ch("Exchange\n(USD/CAD)"), justify="right")
+        table.add_column(_ch("Proceeds\n(CAD)"), justify="right")
+        table.add_column(_ch("ACB Used\n(CAD)"), justify="right")
         table.add_column(_ch("Gain / Loss\n(CAD)"), justify="right")
         table.add_column(_ch("Taxable\n(CAD)"), justify="right")
 
     for g in sorted(gains, key=lambda e: e.date):
-        row = [
+        row: list = [
             str(g.date),
             g.ticker,
             str(g.shares_sold),
             _money(g.proceeds),
-            _money(g.acb_used),
-            _colored_money(g.capital_gain),
         ]
         if has_cad:
             rate_str = f"{g.exchange_rate:.4f}" if g.exchange_rate else "—"
             row.append(rate_str)
-            row.append(_colored_money(g.capital_gain_cad) if g.capital_gain_cad is not None else "—")
-            row.append(_colored_money(g.taxable_gain_cad) if g.taxable_gain_cad is not None else "—")
+            row.append(_money(g.proceeds_cad) if g.proceeds_cad is not None else "—")
+            row.append(_money(g.acb_used) if g.acb_used is not None else "—")
+            row.append(_colored_money(g.capital_gain) if g.capital_gain is not None else "—")
+            row.append(_colored_money(g.taxable_gain) if g.taxable_gain is not None else "—")
         table.add_row(*row)
 
     # Totals row
     total_proceeds = sum((g.proceeds for g in gains), Decimal("0"))
-    total_acb_used = sum((g.acb_used for g in gains), Decimal("0"))
-    total_gain = sum((g.capital_gain for g in gains), Decimal("0"))
     table.add_section()
-    totals_row = [
-        "", "TOTAL", "",
-        _money(total_proceeds),
-        _money(total_acb_used),
-        _colored_money(total_gain),
-    ]
+    totals_row: list = ["", "TOTAL", "", _money(total_proceeds)]
     if has_cad:
-        total_gain_cad = sum((g.capital_gain_cad for g in gains if g.capital_gain_cad is not None), Decimal("0"))
-        total_taxable_cad_row = sum((g.taxable_gain_cad for g in gains if g.taxable_gain_cad is not None), Decimal("0"))
-        totals_row += ["", _colored_money(total_gain_cad), _colored_money(total_taxable_cad_row)]
+        total_proceeds_cad = sum((g.proceeds_cad for g in gains if g.proceeds_cad is not None), Decimal("0"))
+        total_acb_used = sum((g.acb_used for g in gains if g.acb_used is not None), Decimal("0"))
+        total_gain_cad = sum((g.capital_gain for g in gains if g.capital_gain is not None), Decimal("0"))
+        total_taxable_row = sum((g.taxable_gain for g in gains if g.taxable_gain is not None), Decimal("0"))
+        totals_row += [
+            "",
+            _money(total_proceeds_cad),
+            _money(total_acb_used),
+            _colored_money(total_gain_cad),
+            _colored_money(total_taxable_row),
+        ]
     table.add_row(*totals_row, style="bold")
 
     console.print(table)
     console.print()
 
-    total_gain_usd = sum((g.capital_gain for g in gains), Decimal("0"))
-    summary_color = "green" if total_gain_usd >= 0 else "red"
-
-    lines = [
-        f"Total capital gain / loss (USD):  {_money(total_gain_usd)}",
-    ]
-    if has_cad and total_taxable_cad is not None:
-        total_gain_cad = sum((g.capital_gain_cad for g in gains if g.capital_gain_cad is not None), Decimal("0"))
-        lines += [
+    if has_cad:
+        total_gain_cad = sum((g.capital_gain for g in gains if g.capital_gain is not None), Decimal("0"))
+        summary_color = "green" if total_gain_cad >= 0 else "red"
+        lines = [
             f"Total capital gain / loss (CAD):  {_money(total_gain_cad)}",
-            f"Taxable amount 50% (CAD):         {_money(total_taxable_cad)}",
         ]
-    notes = []
-    if has_cad and total_taxable_cad is not None:
-        notes.append("[dim]Rates: Bank of Canada daily USD/CAD (weekends/holidays use prior business day)[/dim]")
-    notes += [
+        if total_taxable_cad is not None:
+            lines.append(f"Taxable amount 50% (CAD):         {_money(total_taxable_cad)}")
+    else:
+        summary_color = "yellow"
+        lines = ["[yellow]CAD amounts unavailable — FX rates could not be fetched.[/yellow]"]
+
+    notes = [
+        "[dim]Rates: Bank of Canada daily USD/CAD (weekends/holidays use prior business day)[/dim]",
         "[dim]The 50% inclusion rate applies to net capital gains for 2024.[/dim]",
         "[dim]Capital losses can offset gains in the same year, be carried back[/dim]",
         "[dim]3 years (T1A), or carried forward indefinitely.[/dim]",

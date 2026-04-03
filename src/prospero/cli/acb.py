@@ -77,18 +77,18 @@ def _total_acb_cad(tx: "StockTransaction") -> str:
 
 def _compute_preview_data(
     new_transactions: list[StockTransaction],
-) -> tuple[dict[int, Decimal], dict[int, Decimal], dict[int, Decimal], dict[int, Decimal | None]]:
+) -> tuple[dict[int, Decimal | None], dict[int, Decimal], dict[int, Decimal | None]]:
     """
-    Replay the existing ledger plus new_transactions and return four mappings
+    Replay the existing ledger plus new_transactions and return three mappings
     keyed by id(tx) for every transaction in new_transactions:
 
-        acb_used:           total ACB consumed (SELL rows only; absent for other types)
-        pool_acb_after:     total pool ACB (USD) for that ticker after the transaction
+        acb_used_cad:       CAD ACB consumed (SELL rows only; absent for other types),
+                            or None if the FX rate for any prior acquisition is unavailable
         pool_units_after:   total shares held for that ticker after the transaction
         pool_acb_cad_after: total pool ACB (CAD) for that ticker after the transaction,
-                            or None if the FX rate for that date is unavailable
+                            or None if any FX rate in the pool history is unavailable
 
-    total_acb_used = shares_sold × (total_acb / total_shares) at time of sale.
+    total_acb_used_cad = shares_sold × (total_acb_cad / total_shares) at time of sale.
     """
     ledger = load_acb_ledger()
     new_ids = {id(tx) for tx in new_transactions}
@@ -99,52 +99,63 @@ def _compute_preview_data(
     except Exception:
         fx_rates = {}
 
-    pools: dict[str, tuple[Decimal, Decimal]] = {}      # ticker -> (shares, total_acb_usd)
+    share_pools: dict[str, Decimal] = {}               # ticker -> total_shares
     cad_pools: dict[str, tuple[Decimal, Decimal]] = {}  # ticker -> (shares, total_acb_cad)
-    acb_used: dict[int, Decimal] = {}
-    pool_acb_after: dict[int, Decimal] = {}
+    cad_complete: dict[str, bool] = {}                  # True if all acquisitions had FX rates
+
+    acb_used_cad: dict[int, Decimal | None] = {}
     pool_units_after: dict[int, Decimal] = {}
     pool_acb_cad_after: dict[int, Decimal | None] = {}
 
     for tx in all_txs:
-        shares, acb = pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
-        _, cad_acb = cad_pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        shares = share_pools.get(tx.ticker, Decimal("0"))
+        cad_shares, cad_acb = cad_pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
+        complete = cad_complete.get(tx.ticker, True)
         rate = fx_rates.get(tx.date)
-        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
-            cost = tx.quantity * tx.price_per_share
-            new_shares = shares + tx.quantity
-            new_acb = acb + cost
-            new_cad_acb = cad_acb + cost * rate if rate is not None else None
-            pools[tx.ticker] = (new_shares, new_acb)
-            cad_pools[tx.ticker] = (new_shares, new_cad_acb if new_cad_acb is not None else cad_acb + cost)
-            if id(tx) in new_ids:
-                pool_acb_after[id(tx)] = new_acb.quantize(Decimal("0.01"))
-                pool_units_after[id(tx)] = new_shares
-                pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01")) if new_cad_acb is not None else None
-        elif tx.transaction_type == TransactionType.SELL:
-            used = (tx.quantity * acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
-            cad_used = (tx.quantity * cad_acb / shares).quantize(Decimal("0.01")) if shares > 0 else Decimal("0")
-            new_shares = shares - tx.quantity
-            new_acb = acb - used
-            new_cad_acb = cad_acb - cad_used
-            pools[tx.ticker] = (new_shares, new_acb)
-            cad_pools[tx.ticker] = (new_shares, new_cad_acb)
-            if id(tx) in new_ids:
-                acb_used[id(tx)] = used
-                pool_acb_after[id(tx)] = new_acb.quantize(Decimal("0.01"))
-                pool_units_after[id(tx)] = new_shares
-                pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01"))
 
-    return acb_used, pool_acb_after, pool_units_after, pool_acb_cad_after
+        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
+            cost_usd = tx.quantity * tx.price_per_share
+            new_shares = shares + tx.quantity
+            share_pools[tx.ticker] = new_shares
+            if rate is not None:
+                new_cad_acb = cad_acb + cost_usd * rate
+            else:
+                new_cad_acb = cad_acb
+                complete = False
+            cad_pools[tx.ticker] = (new_shares, new_cad_acb)
+            cad_complete[tx.ticker] = complete
+            if id(tx) in new_ids:
+                pool_units_after[id(tx)] = new_shares
+                pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01")) if complete else None
+
+        elif tx.transaction_type == TransactionType.SELL:
+            new_shares = shares - tx.quantity
+            share_pools[tx.ticker] = new_shares
+            if cad_shares > 0 and complete:
+                cad_used = (tx.quantity * cad_acb / cad_shares).quantize(Decimal("0.01"))
+                new_cad_acb = cad_acb - cad_used
+                cad_pools[tx.ticker] = (cad_shares - tx.quantity, new_cad_acb)
+                if id(tx) in new_ids:
+                    acb_used_cad[id(tx)] = cad_used
+                    pool_units_after[id(tx)] = new_shares
+                    pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01"))
+            else:
+                cad_pools[tx.ticker] = (cad_shares - tx.quantity, cad_acb)
+                if id(tx) in new_ids:
+                    acb_used_cad[id(tx)] = None
+                    pool_units_after[id(tx)] = new_shares
+                    pool_acb_cad_after[id(tx)] = None
+
+    return acb_used_cad, pool_units_after, pool_acb_cad_after
 
 
 def _render_import_preview(
     transactions: list[StockTransaction],
-) -> tuple[dict, dict, dict, dict, dict]:
+) -> tuple[dict, dict, dict, dict]:
     """Print a summary table of transactions about to be imported.
 
-    Returns (fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map,
-    pool_acb_cad_after_map) so callers can reuse the data (e.g. for PDF output).
+    Returns (fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
+    so callers can reuse the data (e.g. for PDF output).
     """
     console.print("[dim]Fetching Bank of Canada USD/CAD rates…[/dim]")
     try:
@@ -152,7 +163,7 @@ def _render_import_preview(
     except Exception:
         fx_rates = {}
 
-    acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map = _compute_preview_data(transactions)
+    acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = _compute_preview_data(transactions)
 
     def _ch(label: str) -> Text:
         return Text(label, justify="center")
@@ -164,17 +175,14 @@ def _render_import_preview(
     table.add_column(_ch("Net Units"), justify="right")
     table.add_column(_ch("Total\nUnits"), justify="right")
     table.add_column(_ch("Price\n(USD)"), justify="right")
-    table.add_column(_ch("ACB Used\n(USD)"), justify="right")
-    table.add_column(_ch("Total ACB\n(USD)"), justify="right")
     table.add_column(_ch("Exchange\n(USD/CAD)"), justify="right")
+    table.add_column(_ch("ACB Used\n(CAD)"), justify="right")
     table.add_column(_ch("Total ACB\n(CAD)"), justify="right")
     for tx in sorted(transactions, key=lambda t: t.date):
         rate = fx_rates.get(tx.date)
         rate_str = f"{rate:.4f}" if rate is not None else "—"
-        acb_used = acb_used_map.get(id(tx))
-        acb_str = f"${acb_used:,.2f}" if acb_used is not None else "—"
-        pool_acb = pool_acb_after_map.get(id(tx))
-        pool_str = f"${pool_acb:,.2f}" if pool_acb is not None else "—"
+        acb_used_cad = acb_used_cad_map.get(id(tx))
+        acb_str = f"${acb_used_cad:,.2f}" if acb_used_cad is not None else "—"
         pool_units = pool_units_after_map.get(id(tx))
         units_str = str(pool_units) if pool_units is not None else "—"
         pool_acb_cad = pool_acb_cad_after_map.get(id(tx))
@@ -188,13 +196,12 @@ def _render_import_preview(
             qty_str,
             units_str,
             f"${tx.price_per_share:,.2f}",
-            acb_str,
-            pool_str,
             rate_str,
+            acb_str,
             cad_str,
         )
     console.print(table)
-    return fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map
+    return fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map
 
 
 @app.command("import")
@@ -242,8 +249,8 @@ def import_csv(
 
     if output_pdf is not None:
         from prospero.display.pdf import pdf_import_preview
-        fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
-        pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map)
+        fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
+        pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
         console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
 
 
@@ -290,8 +297,8 @@ def import_ms(
 
     if output_pdf is not None:
         from prospero.display.pdf import pdf_import_preview
-        fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
-        pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map)
+        fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
+        pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
         console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
 
 
@@ -424,8 +431,14 @@ def show(
     if not ledger.transactions:
         console.print("[dim]No transactions recorded yet. Use 'prospero acb import' to get started.[/dim]")
         return
+    fx_rates = None
     try:
-        pools = compute_acb_pools(ledger.transactions)
+        console.print("[dim]Fetching Bank of Canada USD/CAD rates…[/dim]")
+        fx_rates = get_rates_for_transactions(ledger.transactions)
+    except Exception as e:
+        err.print(f"[yellow]Could not fetch FX rates ({e}). CAD ACB will be unavailable.[/yellow]")
+    try:
+        pools = compute_acb_pools(ledger.transactions, fx_rates=fx_rates)
     except ValueError as e:
         err.print(f"[red]Error: {e}[/red]")
         err.print("[yellow]Tip: this usually means transactions from a prior year are missing from the ledger. Import earlier activity reports first.[/yellow]")
@@ -475,7 +488,7 @@ def report(
         err.print(f"[yellow]Could not fetch FX rates ({e}). Showing USD only.[/yellow]")
 
     try:
-        pools, gains, _total_taxable_usd, total_taxable_cad = acb_report(
+        pools, gains, total_taxable_cad = acb_report(
             ledger.transactions, target_year, fx_rates
         )
     except ValueError as e:

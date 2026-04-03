@@ -7,6 +7,9 @@ These tests cover the core Canadian ACB calculation rules:
   - 50% inclusion rate applied to taxable gains
   - Cross-year accuracy (prior-year sells must affect ACB for future sells)
   - Edge cases: full position close, multiple tickers, oversell validation
+
+ACB is now tracked in CAD. Tests supply fx_rates with rate=1.0 so that CAD values
+equal the original USD values — this exercises the math without network calls.
 """
 
 import pytest
@@ -62,6 +65,11 @@ def sell(ticker: str, dt: str, qty: str, price: str) -> StockTransaction:
     )
 
 
+def fx1(*txs: StockTransaction) -> dict:
+    """Return fx_rates mapping every transaction date to 1.0 (USD=CAD for test simplicity)."""
+    return {tx.date: Decimal("1") for tx in txs}
+
+
 # ---------------------------------------------------------------------------
 # compute_acb_pools — pool maintenance
 # ---------------------------------------------------------------------------
@@ -73,7 +81,7 @@ def test_opening_balance_seeds_pool():
         opening("GOOG", "2024-12-31", "100", "120.00"),
         sell("GOOG", "2025-07-01", "40", "200.00"),
     ]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     # 60 shares remain, ACB unchanged per share
     assert pools["GOOG"].shares == Decimal("60")
     assert pools["GOOG"].total_acb == Decimal("7200.00")  # 60 * 120
@@ -84,7 +92,7 @@ def test_opening_balance_averages_with_subsequent_vests():
         opening("GOOG", "2024-12-31", "100", "120.00"),   # pool: 100 @ 120 = 12000
         vest("GOOG", "2025-01-25", "50", "200.00"),        # pool: 150 @ 146.67 = 22000
     ]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     assert pools["GOOG"].shares == Decimal("150")
     assert pools["GOOG"].total_acb == Decimal("22000.00")
 
@@ -96,7 +104,7 @@ def test_opening_balance_enables_sell_that_would_otherwise_fail():
         vest("GOOG", "2025-01-25", "50", "200.00"),
         sell("GOOG", "2025-07-01", "400", "250.00"),
     ]
-    gains = compute_capital_gains(txs, 2025)
+    gains = compute_capital_gains(txs, 2025, fx_rates=fx1(*txs))
     assert len(gains) == 1
     # ACB per share after opening + vest: (500*100 + 50*200) / 550 = 60000/550 ≈ 109.09
     assert gains[0].shares_sold == Decimal("400")
@@ -104,7 +112,7 @@ def test_opening_balance_enables_sell_that_would_otherwise_fail():
 
 def test_single_vest_creates_pool():
     txs = [vest("AAPL", "2024-01-15", "25", "185.50")]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     assert "AAPL" in pools
     p = pools["AAPL"]
     assert p.shares == Decimal("25")
@@ -119,7 +127,7 @@ def test_buy_averages_acb_pool():
         vest("AAPL", "2024-01-15", "25", "185.50"),
         buy("AAPL", "2024-03-01", "10", "190.00"),
     ]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     p = pools["AAPL"]
     assert p.shares == Decimal("35")
     assert p.total_acb == Decimal("6537.50")
@@ -136,7 +144,7 @@ def test_sell_reduces_pool_by_acb_not_proceeds():
         vest("AAPL", "2024-01-15", "25", "185.50"),
         sell("AAPL", "2024-06-15", "20", "210.00"),  # sell at higher price
     ]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     p = pools["AAPL"]
     assert p.shares == Decimal("5")
     # Remaining ACB = 4637.50 - (20 * 185.50) = 4637.50 - 3710.00 = 927.50
@@ -150,7 +158,7 @@ def test_sell_entire_position_removes_ticker():
         vest("AAPL", "2024-01-15", "10", "150.00"),
         sell("AAPL", "2024-06-01", "10", "200.00"),
     ]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     assert "AAPL" not in pools  # fully closed position excluded
 
 
@@ -159,14 +167,14 @@ def test_multiple_tickers_have_independent_pools():
         vest("AAPL", "2024-01-15", "10", "150.00"),
         vest("GOOG", "2024-02-01", "5", "100.00"),
     ]
-    pools = compute_acb_pools(txs)
+    pools = compute_acb_pools(txs, fx_rates=fx1(*txs))
     assert pools["AAPL"].shares == Decimal("10")
     assert pools["AAPL"].total_acb == Decimal("1500.00")
     assert pools["GOOG"].shares == Decimal("5")
     assert pools["GOOG"].total_acb == Decimal("500.00")
     # AAPL sell should not affect GOOG
-    txs.append(sell("AAPL", "2024-06-01", "10", "200.00"))
-    pools2 = compute_acb_pools(txs)
+    txs2 = txs + [sell("AAPL", "2024-06-01", "10", "200.00")]
+    pools2 = compute_acb_pools(txs2, fx_rates=fx1(*txs2))
     assert "AAPL" not in pools2
     assert pools2["GOOG"].total_acb == Decimal("500.00")  # unchanged
 
@@ -186,13 +194,22 @@ def test_sell_with_no_prior_acquisitions_raises():
         compute_acb_pools(txs)
 
 
+def test_no_fx_rates_returns_none_acb():
+    """Without FX rates, pool ACB fields are None."""
+    txs = [vest("AAPL", "2024-01-15", "10", "150.00")]
+    pools = compute_acb_pools(txs)
+    assert pools["AAPL"].shares == Decimal("10")
+    assert pools["AAPL"].total_acb is None
+    assert pools["AAPL"].acb_per_share is None
+
+
 # ---------------------------------------------------------------------------
 # compute_capital_gains — gain/loss computation
 # ---------------------------------------------------------------------------
 
 
 def test_capital_gain_simple_vest_and_sell():
-    # Vest 25 @ 185.50, sell 20 @ 210.00
+    # Vest 25 @ 185.50, sell 20 @ 210.00 (rate=1.0, so CAD == USD numerically)
     # ACB used = 20 * 185.50 = 3710.00
     # Proceeds = 20 * 210.00 = 4200.00
     # Gain = 490.00, taxable = 245.00
@@ -200,15 +217,16 @@ def test_capital_gain_simple_vest_and_sell():
         vest("AAPL", "2024-01-15", "25", "185.50"),
         sell("AAPL", "2024-06-15", "20", "210.00"),
     ]
-    gains = compute_capital_gains(txs, 2024)
+    gains = compute_capital_gains(txs, 2024, fx_rates=fx1(*txs))
     assert len(gains) == 1
     g = gains[0]
     assert g.ticker == "AAPL"
     assert g.shares_sold == Decimal("20")
-    assert g.proceeds == Decimal("4200.00")
+    assert g.proceeds == Decimal("4200.00")      # USD proceeds (raw)
+    assert g.proceeds_cad == Decimal("4200.00")  # CAD proceeds (rate=1.0)
     assert g.acb_used == Decimal("3710.00")
     assert g.capital_gain == Decimal("490.00")
-    assert g.taxable_gain == Decimal("245.00")  # 50% inclusion
+    assert g.taxable_gain == Decimal("245.00")   # 50% inclusion
 
 
 def test_capital_loss():
@@ -216,7 +234,7 @@ def test_capital_loss():
         vest("AAPL", "2024-01-15", "10", "200.00"),
         sell("AAPL", "2024-06-01", "10", "150.00"),  # sell below ACB
     ]
-    gains = compute_capital_gains(txs, 2024)
+    gains = compute_capital_gains(txs, 2024, fx_rates=fx1(*txs))
     g = gains[0]
     assert g.capital_gain == Decimal("-500.00")
     assert g.taxable_gain == Decimal("-250.00")  # negative = capital loss
@@ -228,8 +246,9 @@ def test_gains_filtered_to_requested_year():
         sell("AAPL", "2023-12-01", "10", "120.00"),
         sell("AAPL", "2024-03-01", "10", "200.00"),
     ]
-    gains_2023 = compute_capital_gains(txs, 2023)
-    gains_2024 = compute_capital_gains(txs, 2024)
+    rates = fx1(*txs)
+    gains_2023 = compute_capital_gains(txs, 2023, fx_rates=rates)
+    gains_2024 = compute_capital_gains(txs, 2024, fx_rates=rates)
 
     assert len(gains_2023) == 1
     assert gains_2023[0].date.year == 2023
@@ -250,11 +269,11 @@ def test_cross_year_acb_correctness():
         sell("AAPL", "2023-06-01", "10", "120.00"),   # reduces pool to 10 @ 100 total = 1000
         sell("AAPL", "2024-03-01", "10", "150.00"),
     ]
-    gains = compute_capital_gains(txs, 2024)
+    gains = compute_capital_gains(txs, 2024, fx_rates=fx1(*txs))
     assert len(gains) == 1
     g = gains[0]
     # After 2023 sell: 10 shares remain, total_acb = 2000 - (10 * 100) = 1000
-    # 2024 sell: proceeds = 1500, acb_used = 10 * (1000/10) = 1000, gain = 500
+    # 2024 sell: proceeds_cad = 1500, acb_used = 10 * (1000/10) = 1000, gain = 500
     assert g.acb_used == Decimal("1000.00")
     assert g.capital_gain == Decimal("500.00")
     assert g.taxable_gain == Decimal("250.00")
@@ -266,7 +285,7 @@ def test_multiple_sells_same_ticker_same_year():
         sell("AAPL", "2024-03-01", "10", "120.00"),   # gain = 200, taxable = 100
         sell("AAPL", "2024-09-01", "10", "80.00"),    # loss = -200, taxable = -100
     ]
-    gains = compute_capital_gains(txs, 2024)
+    gains = compute_capital_gains(txs, 2024, fx_rates=fx1(*txs))
     assert len(gains) == 2
     total = sum(g.capital_gain for g in gains)
     assert total == Decimal("0.00")  # gain and loss cancel out
@@ -281,6 +300,21 @@ def test_no_sells_returns_empty_list():
     assert gains == []
 
 
+def test_no_fx_rates_returns_none_cad_fields():
+    """Without FX rates, CAD fields on gain entries are None."""
+    txs = [
+        vest("AAPL", "2024-01-15", "10", "100.00"),
+        sell("AAPL", "2024-06-01", "10", "150.00"),
+    ]
+    gains = compute_capital_gains(txs, 2024)
+    assert len(gains) == 1
+    g = gains[0]
+    assert g.proceeds == Decimal("1500.00")  # USD proceeds always present
+    assert g.acb_used is None
+    assert g.capital_gain is None
+    assert g.taxable_gain is None
+
+
 # ---------------------------------------------------------------------------
 # acb_report — integration
 # ---------------------------------------------------------------------------
@@ -291,7 +325,7 @@ def test_acb_report_returns_correct_tuple():
         vest("AAPL", "2024-01-15", "25", "185.50"),
         sell("AAPL", "2024-06-15", "20", "210.00"),
     ]
-    pools, gains, total_taxable, _ = acb_report(txs, 2024)
+    pools, gains, total_taxable = acb_report(txs, 2024, fx_rates=fx1(*txs))
 
     assert "AAPL" in pools
     assert pools["AAPL"].shares == Decimal("5")
@@ -308,7 +342,7 @@ def test_acb_report_total_taxable_sums_all_gains():
         sell("AAPL", "2024-03-01", "10", "120.00"),  # taxable = 100
         sell("AAPL", "2024-09-01", "10", "110.00"),  # taxable = 50
     ]
-    _, gains, total_taxable, _ = acb_report(txs, 2024)
+    _, gains, total_taxable = acb_report(txs, 2024, fx_rates=fx1(*txs))
     expected = sum(g.taxable_gain for g in gains)
     assert total_taxable == expected
     assert total_taxable == Decimal("150.00")
@@ -319,8 +353,18 @@ def test_acb_report_no_sells_zero_taxable():
         vest("AAPL", "2024-01-01", "10", "150.00"),
         buy("GOOG", "2024-06-01", "5", "100.00"),
     ]
-    pools, gains, total_taxable, _ = acb_report(txs, 2024)
+    pools, gains, total_taxable = acb_report(txs, 2024, fx_rates=fx1(*txs))
     assert gains == []
     assert total_taxable == Decimal("0.00")
     assert "AAPL" in pools
     assert "GOOG" in pools
+
+
+def test_acb_report_no_fx_rates_returns_none_taxable():
+    txs = [
+        vest("AAPL", "2024-01-01", "10", "150.00"),
+        sell("AAPL", "2024-06-01", "10", "200.00"),
+    ]
+    pools, gains, total_taxable = acb_report(txs, 2024)
+    assert total_taxable is None
+    assert gains[0].capital_gain is None

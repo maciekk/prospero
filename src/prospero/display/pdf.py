@@ -147,10 +147,7 @@ def pdf_acb_pools(
     """Write a PDF of current ACB pools to *path*."""
     pdf = _new_pdf("ACB Pools", title)
 
-    has_cad = any(e.acb_per_share_cad is not None for e in pools.values())
-    acb_col = "ACB / Share (CAD)" if has_cad else "ACB / Share (USD)"
-
-    headings = ["Ticker", "Shares", acb_col, "Total ACB (USD)"]
+    headings = ["Ticker", "Shares", "ACB / Share (CAD)", "Total ACB (CAD)"]
     col_widths = [0.15, 0.20, 0.35, 0.30]
 
     pdf.set_font("Helvetica", "", 8)
@@ -169,16 +166,13 @@ def pdf_acb_pools(
         for h in headings:
             hrow.cell(h)
         for entry in sorted(pools.values(), key=lambda e: e.ticker):
-            acb_display = (
-                _money(entry.acb_per_share_cad)
-                if has_cad and entry.acb_per_share_cad is not None
-                else _money(entry.acb_per_share)
-            )
+            acb_ps = _money(entry.acb_per_share) if entry.acb_per_share is not None else ""
+            total_acb = _money(entry.total_acb) if entry.total_acb is not None else ""
             row = table.row()
             row.cell(entry.ticker)
             row.cell(str(entry.shares))
-            row.cell(acb_display)
-            row.cell(_money(entry.total_acb))
+            row.cell(acb_ps)
+            row.cell(total_acb)
 
     pdf.output(str(path))
 
@@ -207,31 +201,26 @@ def pdf_capital_gains_report(
         pdf.output(str(path))
         return
 
-    has_cad = any(g.capital_gain_cad is not None for g in gains)
+    has_cad = any(g.capital_gain is not None for g in gains)
 
     if has_cad:
         headings = [
             "Date", "Ticker", "Shares Sold",
-            "Proceeds (USD)", "ACB Used (USD)", "Gain/Loss (USD)",
-            "Exch (USD/CAD)", "Gain/Loss (CAD)", "Taxable (CAD)",
+            "Proceeds (USD)", "Exch (USD/CAD)", "Proceeds (CAD)",
+            "ACB Used (CAD)", "Gain/Loss (CAD)", "Taxable (CAD)",
         ]
-        col_widths = [0.09, 0.07, 0.08, 0.10, 0.10, 0.11, 0.10, 0.11, 0.10]
+        col_widths = [0.09, 0.07, 0.08, 0.10, 0.10, 0.10, 0.11, 0.11, 0.10]
         text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
     else:
-        headings = [
-            "Date", "Ticker", "Shares Sold",
-            "Proceeds (USD)", "ACB Used (USD)", "Gain/Loss (USD)",
-        ]
-        col_widths = [0.13, 0.10, 0.12, 0.22, 0.22, 0.21]
-        text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
+        headings = ["Date", "Ticker", "Shares Sold", "Proceeds (USD)"]
+        col_widths = [0.20, 0.15, 0.20, 0.45]
+        text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT")
 
     pdf.set_font("Helvetica", "", 8)
     header_face = FontFace(fill_color=HEADER_BG, emphasis="BOLD")
     totals_face = FontFace(fill_color=TOTALS_BG, emphasis="BOLD")
 
-    total_proceeds = sum((g.proceeds for g in gains), Decimal("0"))
-    total_acb_used = sum((g.acb_used for g in gains), Decimal("0"))
-    total_gain_usd = sum((g.capital_gain for g in gains), Decimal("0"))
+    total_proceeds_usd = sum((g.proceeds for g in gains), Decimal("0"))
 
     with pdf.table(
         col_widths=col_widths,
@@ -252,47 +241,54 @@ def pdf_capital_gains_report(
             row.cell(g.ticker)
             row.cell(str(g.shares_sold))
             row.cell(_money(g.proceeds))
-            row.cell(_money(g.acb_used))
-            row.cell(_money(g.capital_gain))
             if has_cad:
                 row.cell(f"{g.exchange_rate:.4f}" if g.exchange_rate else "")
-                row.cell(_money(g.capital_gain_cad) if g.capital_gain_cad is not None else "")
-                row.cell(_money(g.taxable_gain_cad) if g.taxable_gain_cad is not None else "")
+                row.cell(_money(g.proceeds_cad) if g.proceeds_cad is not None else "")
+                row.cell(_money(g.acb_used) if g.acb_used is not None else "")
+                row.cell(_money(g.capital_gain) if g.capital_gain is not None else "")
+                row.cell(_money(g.taxable_gain) if g.taxable_gain is not None else "")
 
         # Totals row
         trow = table.row(style=totals_face)
         trow.cell("")
         trow.cell("TOTAL")
         trow.cell("")
-        trow.cell(_money(total_proceeds))
-        trow.cell(_money(total_acb_used))
-        trow.cell(_money(total_gain_usd))
+        trow.cell(_money(total_proceeds_usd))
         if has_cad:
+            total_proceeds_cad = sum(
+                (g.proceeds_cad for g in gains if g.proceeds_cad is not None),
+                Decimal("0"),
+            )
+            total_acb_used_cad = sum(
+                (g.acb_used for g in gains if g.acb_used is not None),
+                Decimal("0"),
+            )
             total_gain_cad = sum(
-                (g.capital_gain_cad for g in gains if g.capital_gain_cad is not None),
+                (g.capital_gain for g in gains if g.capital_gain is not None),
                 Decimal("0"),
             )
             total_taxable_row = sum(
-                (g.taxable_gain_cad for g in gains if g.taxable_gain_cad is not None),
+                (g.taxable_gain for g in gains if g.taxable_gain is not None),
                 Decimal("0"),
             )
             trow.cell("")
+            trow.cell(_money(total_proceeds_cad))
+            trow.cell(_money(total_acb_used_cad))
             trow.cell(_money(total_gain_cad))
             trow.cell(_money(total_taxable_row))
 
     # Summary box
-    summary_rows: list[tuple[str, str]] = [
-        ("Total capital gain / loss (USD):", _money(total_gain_usd)),
-    ]
     if has_cad and total_taxable_cad is not None:
         total_gain_cad = sum(
-            (g.capital_gain_cad for g in gains if g.capital_gain_cad is not None),
+            (g.capital_gain for g in gains if g.capital_gain is not None),
             Decimal("0"),
         )
-        summary_rows += [
+        summary_rows: list[tuple[str, str]] = [
             ("Total capital gain / loss (CAD):", _money(total_gain_cad)),
             ("Taxable amount 50% (CAD):", _money(total_taxable_cad)),
         ]
+    else:
+        summary_rows = [("CAD amounts unavailable - FX rates could not be fetched.", "")]
     _summary_box(pdf, summary_rows, title=f"Tax Year {year} Summary (Canada -ON)")
 
     notes = []
@@ -310,9 +306,7 @@ def pdf_capital_gains_report(
     if pools:
         pdf.add_page()
         _section_heading(pdf, pools_title)
-        has_cad_pools = any(e.acb_per_share_cad is not None for e in pools.values())
-        acb_col = "ACB / Share (CAD)" if has_cad_pools else "ACB / Share (USD)"
-        pool_headings = ["Ticker", "Shares", acb_col, "Total ACB (USD)"]
+        pool_headings = ["Ticker", "Shares", "ACB / Share (CAD)", "Total ACB (CAD)"]
         pool_widths = [0.15, 0.20, 0.35, 0.30]
 
         with pdf.table(
@@ -328,16 +322,13 @@ def pdf_capital_gains_report(
             for h in pool_headings:
                 hrow.cell(h)
             for entry in sorted(pools.values(), key=lambda e: e.ticker):
-                acb_display = (
-                    _money(entry.acb_per_share_cad)
-                    if has_cad_pools and entry.acb_per_share_cad is not None
-                    else _money(entry.acb_per_share)
-                )
+                acb_ps = _money(entry.acb_per_share) if entry.acb_per_share is not None else ""
+                total_acb = _money(entry.total_acb) if entry.total_acb is not None else ""
                 row = table.row()
                 row.cell(entry.ticker)
                 row.cell(str(entry.shares))
-                row.cell(acb_display)
-                row.cell(_money(entry.total_acb))
+                row.cell(acb_ps)
+                row.cell(total_acb)
 
     pdf.output(str(path))
 
@@ -559,8 +550,7 @@ def pdf_import_preview(
     transactions: list[StockTransaction],
     path: Path,
     fx_rates: dict,
-    acb_used_map: dict,
-    pool_acb_after_map: dict,
+    acb_used_cad_map: dict,
     pool_units_after_map: dict,
     pool_acb_cad_after_map: dict,
 ) -> None:
@@ -569,11 +559,10 @@ def pdf_import_preview(
 
     headings = [
         "Date", "Type", "Ticker", "Net Units", "Total Units",
-        "Price (USD)", "ACB Used (USD)", "Total ACB (USD)",
-        "Exch (USD/CAD)", "Total ACB (CAD)",
+        "Price (USD)", "Exch (USD/CAD)", "ACB Used (CAD)", "Total ACB (CAD)",
     ]
-    col_widths = [0.09, 0.07, 0.07, 0.07, 0.09, 0.10, 0.11, 0.11, 0.10, 0.11]
-    text_align = ("LEFT", "LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
+    col_widths = [0.10, 0.08, 0.08, 0.09, 0.10, 0.12, 0.12, 0.13, 0.13]
+    text_align = ("LEFT", "LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
 
     pdf.set_font("Helvetica", "", 8)
     header_face = FontFace(fill_color=HEADER_BG, emphasis="BOLD")
@@ -594,10 +583,8 @@ def pdf_import_preview(
         for tx in sorted(transactions, key=lambda t: t.date):
             rate = fx_rates.get(tx.date)
             rate_str = f"{rate:.4f}" if rate is not None else ""
-            acb_used = acb_used_map.get(id(tx))
-            acb_str = f"${acb_used:,.2f}" if acb_used is not None else ""
-            pool_acb = pool_acb_after_map.get(id(tx))
-            pool_str = f"${pool_acb:,.2f}" if pool_acb is not None else ""
+            acb_used_cad = acb_used_cad_map.get(id(tx))
+            acb_str = f"${acb_used_cad:,.2f}" if acb_used_cad is not None else ""
             pool_units = pool_units_after_map.get(id(tx))
             units_str = str(pool_units) if pool_units is not None else ""
             pool_acb_cad = pool_acb_cad_after_map.get(id(tx))
@@ -612,9 +599,8 @@ def pdf_import_preview(
             row.cell(qty_str)
             row.cell(units_str)
             row.cell(f"${tx.price_per_share:,.2f}")
-            row.cell(acb_str)
-            row.cell(pool_str)
             row.cell(rate_str)
+            row.cell(acb_str)
             row.cell(cad_str)
 
     pdf.output(str(path))
