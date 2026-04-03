@@ -156,7 +156,9 @@ def _parse_ms_price(s: str) -> Decimal:
     return Decimal(s.strip().lstrip("$").replace(",", ""))
 
 
-def parse_ms_activity_dir(directory: Path, ticker: str) -> list[StockTransaction]:
+def parse_ms_activity_dir(
+    directory: Path, ticker: str
+) -> tuple[list[StockTransaction], list[str]]:
     """
     Parse a Morgan Stanley Activity Report directory into StockTransaction objects.
 
@@ -169,9 +171,15 @@ def parse_ms_activity_dir(directory: Path, ticker: str) -> list[StockTransaction
             Execution Date — sale date (DD-Mon-YYYY)
             Price          — proceeds per share ($N.NN)
             Quantity       — shares sold (reported as negative; sign is ignored)
+            Net Amount     — reported total proceeds (USD); used as a sanity check
             Rows where Quantity is 0 or non-numeric are skipped (e.g. footer disclaimer).
 
     `ticker` must be provided by the caller — it is not present in MS files.
+
+    Returns:
+        (transactions, warnings) — warnings is a list of human-readable strings
+        describing rows where computed proceeds (Price × Quantity) differ from the
+        reported Net Amount by more than 0.1%.
 
     Raises:
         FileNotFoundError — if either expected file is missing from the directory.
@@ -180,6 +188,7 @@ def parse_ms_activity_dir(directory: Path, ticker: str) -> list[StockTransaction
     ticker = ticker.strip().upper()
     transactions: list[StockTransaction] = []
     errors: list[str] = []
+    warnings: list[str] = []
 
     # --- Vests: Releases Net Shares Report ---
     releases_path = directory / _MS_RELEASES_FILE
@@ -245,6 +254,20 @@ def parse_ms_activity_dir(directory: Path, ticker: str) -> list[StockTransaction
                 quantity=quantity,
                 price_per_share=price,
             ))
+            # Sanity check: price × quantity should match Net Amount
+            raw_net = row.get("Net Amount", "").lstrip("$").replace(",", "").strip()
+            if raw_net:
+                try:
+                    net_amount = Decimal(raw_net)
+                    computed = price * quantity
+                    if net_amount != 0 and abs(computed - net_amount) / abs(net_amount) > Decimal("0.001"):
+                        warnings.append(
+                            f"{_MS_WITHDRAWALS_FILE} row {row_num} ({tx_date}): "
+                            f"Price×Quantity = ${computed:.2f} but Net Amount = ${net_amount:.2f} "
+                            f"(diff ${computed - net_amount:+.2f})"
+                        )
+                except InvalidOperation:
+                    pass  # unparseable Net Amount — skip check silently
         except (KeyError, ValueError, InvalidOperation) as e:
             errors.append(f"{_MS_WITHDRAWALS_FILE} row {row_num}: {e}")
 
@@ -252,4 +275,4 @@ def parse_ms_activity_dir(directory: Path, ticker: str) -> list[StockTransaction
         raise ValueError("MS activity report contains errors:\n" + "\n".join(errors))
 
     # Return sorted chronologically so callers get a consistent order
-    return sorted(transactions, key=lambda t: t.date)
+    return sorted(transactions, key=lambda t: t.date), warnings

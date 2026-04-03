@@ -184,7 +184,7 @@ def _write_ms_dir(tmp_path, releases=_RELEASES_CONTENT, withdrawals=_WITHDRAWALS
 
 
 def test_ms_parses_vests(tmp_path):
-    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    txs, _ = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
     vests = [t for t in txs if t.transaction_type == TransactionType.VEST]
     assert len(vests) == 2
     assert vests[0].ticker == "GOOG"
@@ -195,7 +195,7 @@ def test_ms_parses_vests(tmp_path):
 
 
 def test_ms_parses_sells(tmp_path):
-    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    txs, _ = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
     sells = [t for t in txs if t.transaction_type == TransactionType.SELL]
     assert len(sells) == 1
     assert sells[0].quantity == Decimal("380.565")  # sign stripped
@@ -204,19 +204,19 @@ def test_ms_parses_sells(tmp_path):
 
 def test_ms_footer_row_skipped(tmp_path):
     # Withdrawals file has a prose footer line — must not cause an error
-    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    txs, _ = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
     sells = [t for t in txs if t.transaction_type == TransactionType.SELL]
     assert len(sells) == 1  # only one real sell row
 
 
 def test_ms_ticker_uppercased(tmp_path):
-    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="goog")
+    txs, _ = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="goog")
     assert all(t.ticker == "GOOG" for t in txs)
 
 
 def test_ms_results_sorted_by_date(tmp_path):
     # Vests are in Jan, sell is in Jul — sorted output should put vests first
-    txs = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    txs, _ = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
     dates = [t.date for t in txs]
     assert dates == sorted(dates)
 
@@ -231,3 +231,33 @@ def test_ms_missing_withdrawals_file_raises(tmp_path):
     (tmp_path / _MS_RELEASES).write_text(_RELEASES_CONTENT)
     with pytest.raises(FileNotFoundError, match=_MS_WITHDRAWALS):
         parse_ms_activity_dir(tmp_path, ticker="GOOG")
+
+
+def test_ms_net_amount_match_no_warning(tmp_path):
+    # $269.46 × 380.565 ≈ $102,547.04; reported $102,545.82 is ~0.001% off — no warning
+    _, warnings = parse_ms_activity_dir(_write_ms_dir(tmp_path), ticker="GOOG")
+    assert warnings == []
+
+
+def test_ms_net_amount_mismatch_warns(tmp_path):
+    # Net Amount is $50,000 instead of ~$102,547 — clearly wrong, should warn
+    withdrawals = """\
+Execution Date,Order Number,Plan,Type,Order Status,Price,Quantity,Net Amount,Net Share Proceeds,Tax Payment Method
+25-Jul-2025,WRC94ED3683-1EE,GSU Class C,Sale,Complete,$269.46,-380.565,"$50,000.00",0,N/A
+"""
+    _write_ms_dir(tmp_path, withdrawals=withdrawals)
+    _, warnings = parse_ms_activity_dir(tmp_path, ticker="GOOG")
+    assert len(warnings) == 1
+    assert "Net Amount" in warnings[0]
+    assert "2025-07-25" in warnings[0]
+
+
+def test_ms_net_amount_missing_column_no_warning(tmp_path):
+    # If the Net Amount column is absent altogether, no warning should fire
+    withdrawals = """\
+Execution Date,Order Number,Plan,Type,Order Status,Price,Quantity
+25-Jul-2025,WRC94ED3683-1EE,GSU Class C,Sale,Complete,$269.46,-380.565
+"""
+    _write_ms_dir(tmp_path, withdrawals=withdrawals)
+    _, warnings = parse_ms_activity_dir(tmp_path, ticker="GOOG")
+    assert warnings == []

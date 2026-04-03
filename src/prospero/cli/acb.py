@@ -283,10 +283,13 @@ def import_ms(
         raise typer.Exit(1)
 
     try:
-        transactions = parse_ms_activity_dir(directory, ticker)
+        transactions, ms_warnings = parse_ms_activity_dir(directory, ticker)
     except (FileNotFoundError, ValueError) as e:
         err.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
+
+    for w in ms_warnings:
+        err.print(f"[yellow]Warning: {w}[/yellow]")
 
     if not transactions:
         console.print("[dim]No transactions found in MS activity report.[/dim]")
