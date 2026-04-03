@@ -161,7 +161,7 @@ def _render_import_preview(
     table.add_column("Date")
     table.add_column("Type")
     table.add_column("Ticker")
-    table.add_column(_ch("Units"), justify="right")
+    table.add_column(_ch("Net Units"), justify="right")
     table.add_column(_ch("Total\nUnits"), justify="right")
     table.add_column(_ch("Price\n(USD)"), justify="right")
     table.add_column(_ch("ACB Used\n(USD)"), justify="right")

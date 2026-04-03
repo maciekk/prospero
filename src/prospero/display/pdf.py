@@ -255,9 +255,9 @@ def pdf_capital_gains_report(
             row.cell(_money(g.acb_used))
             row.cell(_money(g.capital_gain))
             if has_cad:
-                row.cell(f"{g.exchange_rate:.4f}" if g.exchange_rate else "n/a")
-                row.cell(_money(g.capital_gain_cad) if g.capital_gain_cad is not None else "n/a")
-                row.cell(_money(g.taxable_gain_cad) if g.taxable_gain_cad is not None else "n/a")
+                row.cell(f"{g.exchange_rate:.4f}" if g.exchange_rate else "")
+                row.cell(_money(g.capital_gain_cad) if g.capital_gain_cad is not None else "")
+                row.cell(_money(g.taxable_gain_cad) if g.taxable_gain_cad is not None else "")
 
         # Totals row
         trow = table.row(style=totals_face)
@@ -499,7 +499,7 @@ def pdf_tax_breakdown(breakdown: TaxBreakdown, path: Path) -> None:
 
     def _pct_of_income(value: Decimal) -> str:
         if breakdown.income == 0:
-            return "n/a"
+            return ""
         return f"{value / breakdown.income * 100:.1f}%"
 
     headings = ["Component", "Amount", "% of gross"]
@@ -568,7 +568,7 @@ def pdf_import_preview(
     pdf = _new_pdf("ACB Import", f"Import Preview - {len(transactions)} transaction(s)")
 
     headings = [
-        "Date", "Type", "Ticker", "Units", "Total Units",
+        "Date", "Type", "Ticker", "Net Units", "Total Units",
         "Price (USD)", "ACB Used (USD)", "Total ACB (USD)",
         "Exch (USD/CAD)", "Total ACB (CAD)",
     ]
@@ -593,15 +593,15 @@ def pdf_import_preview(
 
         for tx in sorted(transactions, key=lambda t: t.date):
             rate = fx_rates.get(tx.date)
-            rate_str = f"{rate:.4f}" if rate is not None else "n/a"
+            rate_str = f"{rate:.4f}" if rate is not None else ""
             acb_used = acb_used_map.get(id(tx))
-            acb_str = f"${acb_used:,.2f}" if acb_used is not None else "n/a"
+            acb_str = f"${acb_used:,.2f}" if acb_used is not None else ""
             pool_acb = pool_acb_after_map.get(id(tx))
-            pool_str = f"${pool_acb:,.2f}" if pool_acb is not None else "n/a"
+            pool_str = f"${pool_acb:,.2f}" if pool_acb is not None else ""
             pool_units = pool_units_after_map.get(id(tx))
-            units_str = str(pool_units) if pool_units is not None else "n/a"
+            units_str = str(pool_units) if pool_units is not None else ""
             pool_acb_cad = pool_acb_cad_after_map.get(id(tx))
-            cad_str = f"${pool_acb_cad:,.2f}" if pool_acb_cad is not None else "n/a"
+            cad_str = f"${pool_acb_cad:,.2f}" if pool_acb_cad is not None else ""
             is_sell = tx.transaction_type == TransactionType.SELL
             qty_str = f"-{tx.quantity}" if is_sell else str(tx.quantity)
 
