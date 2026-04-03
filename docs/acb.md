@@ -9,6 +9,9 @@ Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital g
 
 Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker are tracked together as a single cost basis position. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the FMV at vest as employment income (reported on your T4), so ACB equals FMV — only appreciation after vesting becomes a capital gain on sale.
 
+<details>
+<summary><strong>Caveats and limitations</strong></summary>
+
 > [!IMPORTANT]
 > **Import your full history, not one year at a time.** Because each sale's ACB depends on all prior acquisitions and dispositions, the ledger must contain every transaction from the beginning. Use `prospero-acb report --year YYYY` to slice out the capital gains for any specific tax year.
 
@@ -18,27 +21,39 @@ Canada uses the **identical-shares average cost method** (ITA s.47): all shares 
 > [!WARNING]
 > **Stock splits are not supported.** The ACB calculation does not account for split adjustments. Export only split-free history, or manually normalize quantities and prices before importing.
 
+</details>
+
 ## How RSU ACB works end-to-end
 
-This is the full lifecycle of a US-listed RSU grant held by a Canadian resident, from vest to sale.
+Full lifecycle of a US-listed RSU grant held by a Canadian resident, from vest to sale.
 
-**(i) Shares vest — gross units (USD), taxed, net units land in your account.**
-Everything at vest is in USD. The broker calculates the employment income as `gross_units × FMV_usd`, withholds shares to cover the tax (~40-50% for high earners in Ontario), and deposits only the *net* units. Record only the net units as a `vest` transaction (with the USD FMV as the price); the withheld shares were liquidated by the broker and never owned by you.
+- **(i) Shares vest — gross units (USD), taxed, net units land in your account.**
+  Everything at vest is in USD. The broker calculates employment income as `gross_units × FMV_usd`, withholds shares to cover the tax (~40-50% for high earners in Ontario), and deposits only the *net* units.
+  - Record only the net units as a `vest` transaction (with the USD FMV as the price)
+  - The withheld shares were liquidated by the broker and never owned by you
 
-**(ii) USD FMV at vest is converted to CAD and becomes your ACB.**
-CRA treats the USD FMV at vest as employment income, already reported on your T4. Because you were taxed on that amount, your cost basis equals that FMV. Prospero fetches the Bank of Canada USD/CAD rate for the *vest date* and converts `net_units × FMV_usd` to CAD. That CAD amount accumulates into the ACB pool. You cannot use today's exchange rate to reconstruct historical CAD costs — each lot's rate is permanently tied to its vest date.
+- **(ii) USD FMV at vest is converted to CAD and becomes your ACB.**
+  CRA treats the USD FMV at vest as employment income, already reported on your T4. Because you were taxed on that amount, your cost basis equals that FMV.
+  - Prospero fetches the Bank of Canada USD/CAD rate for the *vest date* and converts `net_units × FMV_usd` to CAD
+  - That CAD amount accumulates into the ACB pool
+  - You cannot use today's exchange rate to reconstruct historical CAD costs — each lot's rate is permanently tied to its vest date
 
-**(iii) Shares pool together (identical-shares average cost) — ACB tracked in CAD.**
-Canada does not track lots individually. All shares of the same ticker merge into one pool: `(total_shares, total_acb_cad)`. The per-share ACB at any point is `total_acb_cad / total_shares` (in CAD). Each new vest or buy adds to both numbers; each sale removes a proportional slice.
+- **(iii) Shares pool together (identical-shares average cost) — ACB tracked in CAD.**
+  Canada does not track lots individually. All shares of the same ticker merge into one pool: `(total_shares, total_acb_cad)`.
+  - Per-share ACB at any point is `total_acb_cad / total_shares` (in CAD)
+  - Each new vest or buy adds to both numbers; each sale removes a proportional slice
 
-**(iv) Sale proceeds in USD — converted to CAD at the sale date rate, gain computed in CAD.**
-When you sell, the USD proceeds stay in your brokerage account. For tax purposes CRA requires CAD amounts, so prospero converts using the Bank of Canada rate for the *sale date*: `proceeds_cad = shares_sold × price_usd × rate`. The capital gain is `proceeds_cad - (acb_per_share_cad × shares_sold)` (all CAD). Half of the net gain is taxable (50% inclusion rate, `_INCLUSION_RATE` in `acb_engine.py`).
+- **(iv) Sale proceeds in USD — converted to CAD at the sale date rate, gain computed in CAD.**
+  When you sell, the USD proceeds stay in your brokerage account.
+  - Prospero converts using the Bank of Canada rate for the *sale date*: `proceeds_cad = shares_sold × price_usd × rate`
+  - Capital gain: `proceeds_cad - (acb_per_share_cad × shares_sold)` (all CAD)
+  - Half of the net gain is taxable (50% inclusion rate, `_INCLUSION_RATE` in `acb_engine.py`)
 
-**(v) Pool shrinks; remaining shares keep the same per-share ACB (CAD).**
-After the sale, `total_shares` and `total_acb_cad` are both reduced proportionally. The per-share ACB (in CAD) for remaining shares is unchanged — this is a property of the average-cost method.
+- **(v) Pool shrinks; remaining shares keep the same per-share ACB (CAD).**
+  After the sale, `total_shares` and `total_acb_cad` are both reduced proportionally. The per-share ACB (in CAD) for remaining shares is unchanged — this is a property of the average-cost method.
 
-**(vi) Cross-year dependency — always import full history.**
-A 2023 partial sale reduces the CAD pool before any 2024 sale computes its ACB. This is why `prospero-acb report --year YYYY` replays *all* transactions from the beginning; it just filters output to the requested year.
+- **(vi) Cross-year dependency — always import full history.**
+  A 2023 partial sale reduces the CAD pool before any 2024 sale computes its ACB. This is why `prospero-acb report --year YYYY` replays *all* transactions from the beginning; it just filters output to the requested year.
 
 ## Workflow
 
@@ -51,11 +66,14 @@ The `prospero acb` subcommand group works identically.
 
 ## Morgan Stanley Activity Report
 
-Needed settings on export:
+<details>
+<summary><strong>Needed settings on export</strong></summary>
 
 <img src="screenshot-MS-report.png" width="60%">
 
 Key: **USD** currency, to avoid crappy (fixed single day) currency conversions.
+
+</details>
 
 Unpack the Activity Report zip and point `import-ms` at the folder — no manual CSV prep needed.
 
