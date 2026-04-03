@@ -7,19 +7,16 @@ Adjusted Cost Basis (ACB) tracker for Canadian stock grants (RSUs) and capital g
 
 ## Background
 
-Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker are tracked together as a single cost basis position. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the FMV at vest as employment income (reported on your T4), so ACB equals FMV — only appreciation after vesting becomes a capital gain on sale.
+Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker are tracked together as a single cost basis position. The per-share ACB is always `total_acb / total_shares`. When RSUs vest, CRA treats the **Fair Market Value (FMV)** — the stock's closing price on the vest date — as employment income (reported on your T4), so ACB equals FMV — only appreciation after vesting becomes a capital gain on sale.
 
 <details>
 <summary><strong>Caveats and limitations</strong></summary>
 
-> [!IMPORTANT]
-> **Import your full history, not one year at a time.** Because each sale's ACB depends on all prior acquisitions and dispositions, the ledger must contain every transaction from the beginning. Use `prospero-acb report --year YYYY` to slice out the capital gains for any specific tax year.
+**Import your full history, not one year at a time.** Because each sale's ACB depends on all prior acquisitions and dispositions, the ledger must contain every transaction from the beginning. Use `prospero-acb report --year YYYY` to slice out the capital gains for any specific tax year.
 
-> [!IMPORTANT]
-> **USD-denominated grants only.** This tool assumes stock prices and proceeds are in USD (the currency used by most US-listed RSU grants). Bank of Canada rates are fetched to convert to CAD for reporting. If your grants are denominated in another currency, the code will need to be updated.
+**USD-denominated grants only.** This tool assumes stock prices and proceeds are in USD (the currency used by most US-listed RSU grants). Bank of Canada rates are fetched to convert to CAD for reporting. If your grants are denominated in another currency, the code will need to be updated.
 
-> [!WARNING]
-> **Stock splits are not supported.** The ACB calculation does not account for split adjustments. Export only split-free history, or manually normalize quantities and prices before importing.
+**Stock splits are not supported.** The ACB calculation does not account for split adjustments. Export only split-free history, or manually normalize quantities and prices before importing.
 
 </details>
 
@@ -36,7 +33,7 @@ Full lifecycle of a US-listed RSU grant held by a Canadian resident, from vest t
   CRA treats the USD FMV at vest as employment income, already reported on your T4. Because you were taxed on that amount, your cost basis equals that FMV.
   - Prospero fetches the Bank of Canada USD/CAD rate for the *vest date* and converts `net_units × FMV_usd` to CAD
   - That CAD amount accumulates into the ACB pool
-  - You cannot use today's exchange rate to reconstruct historical CAD costs — each lot's rate is permanently tied to its vest date
+  - You cannot use today's exchange rate to reconstruct historical CAD costs — each lot's rate is permanently tied to its vest date and inextricably folded into the accrued CAD ACB
 
 - **(iii) Shares pool together (identical-shares average cost) — ACB tracked in CAD.**
   Canada does not track lots individually. All shares of the same ticker merge into one pool: `(total_shares, total_acb_cad)`.
