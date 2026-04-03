@@ -58,15 +58,17 @@ def csv_capital_gains_report(
         # Capital gains section
         writer.writerow([f"Capital Gains / Losses - {year}"])
         writer.writerow([
-            "date", "ticker", "shares_sold", "proceeds_usd",
+            "date", "ticker", "shares_sold", "price_usd", "proceeds_usd",
             "exchange_rate_usd_cad", "proceeds_cad", "acb_used_cad",
             "capital_gain_cad", "taxable_gain_cad",
         ])
         for g in gains:
+            price_per_share = g.proceeds / g.shares_sold if g.shares_sold else Decimal("0")
             writer.writerow([
                 str(g.date),
                 g.ticker,
                 str(g.shares_sold),
+                str(price_per_share),
                 str(g.proceeds),
                 str(g.exchange_rate) if g.exchange_rate is not None else "",
                 str(g.proceeds_cad) if g.proceeds_cad is not None else "",
@@ -74,7 +76,7 @@ def csv_capital_gains_report(
                 str(g.capital_gain) if g.capital_gain is not None else "",
                 str(g.taxable_gain) if g.taxable_gain is not None else "",
             ])
-        writer.writerow(["", "", "", "", "", "", "", "Total Taxable (CAD)",
+        writer.writerow(["", "", "", "", "", "", "", "", "Total Taxable (CAD)",
                          str(total_taxable_cad) if total_taxable_cad is not None else ""])
 
         if pools:

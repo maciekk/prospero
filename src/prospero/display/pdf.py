@@ -205,16 +205,16 @@ def pdf_capital_gains_report(
 
     if has_cad:
         headings = [
-            "Date", "Ticker", "Shares Sold",
+            "Date", "Ticker", "Shares Sold", "Price (USD)",
             "Proceeds (USD)", "Exch (USD/CAD)", "Proceeds (CAD)",
             "ACB Used (CAD)", "Gain/Loss (CAD)", "Taxable (CAD)",
         ]
-        col_widths = [0.09, 0.07, 0.08, 0.10, 0.10, 0.10, 0.11, 0.11, 0.10]
-        text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
+        col_widths = [0.09, 0.07, 0.07, 0.09, 0.09, 0.09, 0.10, 0.10, 0.10, 0.10]
+        text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT", "RIGHT")
     else:
-        headings = ["Date", "Ticker", "Shares Sold", "Proceeds (USD)"]
-        col_widths = [0.20, 0.15, 0.20, 0.45]
-        text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT")
+        headings = ["Date", "Ticker", "Shares Sold", "Price (USD)", "Proceeds (USD)"]
+        col_widths = [0.18, 0.13, 0.17, 0.17, 0.35]
+        text_align = ("LEFT", "LEFT", "RIGHT", "RIGHT", "RIGHT")
 
     pdf.set_font("Helvetica", "", 8)
     header_face = FontFace(fill_color=HEADER_BG, emphasis="BOLD")
@@ -236,10 +236,12 @@ def pdf_capital_gains_report(
             hrow.cell(h)
 
         for g in sorted(gains, key=lambda e: e.date):
+            price_per_share = g.proceeds / g.shares_sold if g.shares_sold else Decimal("0")
             row = table.row()
             row.cell(str(g.date))
             row.cell(g.ticker)
             row.cell(str(g.shares_sold))
+            row.cell(_money(price_per_share))
             row.cell(_money(g.proceeds))
             if has_cad:
                 row.cell(f"{g.exchange_rate:.4f}" if g.exchange_rate else "")
@@ -252,6 +254,7 @@ def pdf_capital_gains_report(
         trow = table.row(style=totals_face)
         trow.cell("")
         trow.cell("TOTAL")
+        trow.cell("")
         trow.cell("")
         trow.cell(_money(total_proceeds_usd))
         if has_cad:

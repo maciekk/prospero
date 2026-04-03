@@ -288,6 +288,7 @@ def render_capital_gains_report(
     table.add_column("Date")
     table.add_column("Ticker")
     table.add_column(_ch("Shares\nSold"), justify="right", max_width=8)
+    table.add_column(_ch("Price\n(USD)"), justify="right")
     table.add_column(_ch("Proceeds\n(USD)"), justify="right")
     if has_cad:
         table.add_column(_ch("Exchange\n(USD/CAD)"), justify="right")
@@ -297,10 +298,12 @@ def render_capital_gains_report(
         table.add_column(_ch("Taxable\n(CAD)"), justify="right")
 
     for g in sorted(gains, key=lambda e: e.date):
+        price_per_share = g.proceeds / g.shares_sold if g.shares_sold else Decimal("0")
         row: list = [
             str(g.date),
             g.ticker,
             str(g.shares_sold),
+            _money(price_per_share),
             _money(g.proceeds),
         ]
         if has_cad:
@@ -315,7 +318,7 @@ def render_capital_gains_report(
     # Totals row
     total_proceeds = sum((g.proceeds for g in gains), Decimal("0"))
     table.add_section()
-    totals_row: list = ["", "TOTAL", "", _money(total_proceeds)]
+    totals_row: list = ["", "TOTAL", "", "", _money(total_proceeds)]
     if has_cad:
         total_proceeds_cad = sum((g.proceeds_cad for g in gains if g.proceeds_cad is not None), Decimal("0"))
         total_acb_used = sum((g.acb_used for g in gains if g.acb_used is not None), Decimal("0"))

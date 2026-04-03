@@ -1,0 +1,9 @@
+Capital Gains / Losses - 2023
+date,ticker,shares_sold,price_usd,proceeds_usd,exchange_rate_usd_cad,proceeds_cad,acb_used_cad,capital_gain_cad,taxable_gain_cad
+2023-05-22,GOOG,663.570,126.0100064801000648010006480,83616.46,1.3503,112907.31,89111.78,23795.53,11897.77
+2023-07-27,GOOG,235.612,132.6499923603212060506256048,31253.93,1.3201,41258.31,38328.19,2930.12,1465.06
+,,,,,,,,Total Taxable (CAD),13362.83
+
+Year End Holdings & Cost Basis (2023)
+ticker,shares,total_acb_cad,acb_per_share_cad
+GOOG,429.398,79185.20,184.40980846
