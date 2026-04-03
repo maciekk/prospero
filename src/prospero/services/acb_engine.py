@@ -199,6 +199,64 @@ def compute_capital_gains(
     return gains
 
 
+def sanity_check_capital_gains(gains: list[CapitalGainEntry]) -> list[str]:
+    """
+    Verify mathematical invariants on a list of CapitalGainEntry values.
+
+    Checks (where all fields are non-None):
+      1. proceeds_cad == proceeds × exchange_rate
+      2. capital_gain == proceeds_cad - acb_used
+      3. taxable_gain == capital_gain × _INCLUSION_RATE
+
+    Returns a list of human-readable violation strings (empty = all good).
+    """
+    _TOL = Decimal("0.02")  # 2 cents — allows for one rounding step on each side
+    errors: list[str] = []
+    for g in gains:
+        tag = f"{g.date} {g.ticker}"
+        if g.proceeds_cad is not None and g.exchange_rate is not None:
+            expected = (g.proceeds * g.exchange_rate).quantize(_TWO_PLACES, ROUND_HALF_UP)
+            if abs(expected - g.proceeds_cad) > _TOL:
+                errors.append(
+                    f"{tag}: proceeds_cad {g.proceeds_cad} != "
+                    f"proceeds {g.proceeds} x rate {g.exchange_rate} = {expected}"
+                )
+        if g.capital_gain is not None and g.proceeds_cad is not None and g.acb_used is not None:
+            expected = g.proceeds_cad - g.acb_used
+            if abs(expected - g.capital_gain) > _TOL:
+                errors.append(
+                    f"{tag}: capital_gain {g.capital_gain} != "
+                    f"proceeds_cad {g.proceeds_cad} - acb_used {g.acb_used} = {expected}"
+                )
+        if g.taxable_gain is not None and g.capital_gain is not None:
+            expected = (g.capital_gain * _INCLUSION_RATE).quantize(_TWO_PLACES, ROUND_HALF_UP)
+            if abs(expected - g.taxable_gain) > _TOL:
+                errors.append(
+                    f"{tag}: taxable_gain {g.taxable_gain} != "
+                    f"capital_gain {g.capital_gain} x {_INCLUSION_RATE} = {expected}"
+                )
+    return errors
+
+
+def sanity_check_acb_pools(pools: dict[str, AcbPoolEntry]) -> list[str]:
+    """
+    Verify that acb_per_share == total_acb / shares for every pool entry.
+
+    Returns a list of human-readable violation strings (empty = all good).
+    """
+    _TOL = Decimal("0.0001")  # allow for 8-place quantize rounding
+    errors: list[str] = []
+    for ticker, pool in pools.items():
+        if pool.total_acb is not None and pool.acb_per_share is not None and pool.shares > 0:
+            expected = (pool.total_acb / pool.shares).quantize(_EIGHT_PLACES, ROUND_HALF_UP)
+            if abs(expected - pool.acb_per_share) > _TOL:
+                errors.append(
+                    f"{ticker}: acb_per_share {pool.acb_per_share} != "
+                    f"total_acb {pool.total_acb} / shares {pool.shares} = {expected}"
+                )
+    return errors
+
+
 def acb_report(
     transactions: list[StockTransaction],
     year: int,

@@ -259,6 +259,7 @@ def render_acb_pools(pools: dict[str, AcbPoolEntry], title: str = "Holdings & Co
         total_acb = _money(entry.total_acb) if entry.total_acb is not None else "—"
         table.add_row(entry.ticker, str(entry.shares), acb_ps, total_acb)
 
+    console.print()
     console.print(table)
 
 
@@ -333,6 +334,7 @@ def render_capital_gains_report(
         ]
     table.add_row(*totals_row, style="bold")
 
+    console.print()
     console.print(table)
     console.print()
 
