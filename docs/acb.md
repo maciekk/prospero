@@ -22,23 +22,23 @@ Canada uses the **identical-shares average cost method** (ITA s.47): all shares 
 
 This is the full lifecycle of a US-listed RSU grant held by a Canadian resident, from vest to sale.
 
-**(i) Shares vest — gross units, taxed, net units land in your account.**
-When an RSU tranche vests, the broker withholds shares to cover the tax on the employment income (typically ~40-50% for high earners in Ontario). Only the *net* shares are deposited to your account. Record only the net shares as a `vest` transaction; the withheld shares were liquidated by the broker and never owned by you.
+**(i) Shares vest — gross units (USD), taxed, net units land in your account.**
+Everything at vest is in USD. The broker calculates the employment income as `gross_units × FMV_usd`, withholds shares to cover the tax (~40-50% for high earners in Ontario), and deposits only the *net* units. Record only the net units as a `vest` transaction (with the USD FMV as the price); the withheld shares were liquidated by the broker and never owned by you.
 
-**(ii) Vest price (FMV) in USD — that is also your ACB, in CAD.**
-CRA considers the FMV at vest to be employment income, already reported on your T4. Because you were taxed on that amount, your cost basis equals that FMV. The FMV is in USD; prospero fetches the Bank of Canada USD/CAD rate for the *vest date* and converts it to CAD. That CAD amount accumulates into the ACB pool. You cannot use today's exchange rate to reconstruct historical CAD costs — each lot's rate is permanently tied to the vest date.
+**(ii) USD FMV at vest is converted to CAD and becomes your ACB.**
+CRA treats the USD FMV at vest as employment income, already reported on your T4. Because you were taxed on that amount, your cost basis equals that FMV. Prospero fetches the Bank of Canada USD/CAD rate for the *vest date* and converts `net_units × FMV_usd` to CAD. That CAD amount accumulates into the ACB pool. You cannot use today's exchange rate to reconstruct historical CAD costs — each lot's rate is permanently tied to its vest date.
 
-**(iii) Shares pool together (identical-shares average cost).**
-Canada does not track lots individually. All shares of the same ticker merge into one pool: `(total_shares, total_acb_cad)`. The per-share ACB at any point is `total_acb_cad / total_shares`. Each new vest or buy adds to both numbers; each sale removes a proportional slice.
+**(iii) Shares pool together (identical-shares average cost) — ACB tracked in CAD.**
+Canada does not track lots individually. All shares of the same ticker merge into one pool: `(total_shares, total_acb_cad)`. The per-share ACB at any point is `total_acb_cad / total_shares` (in CAD). Each new vest or buy adds to both numbers; each sale removes a proportional slice.
 
-**(iv) Sale proceeds in USD — converted to CAD at the sale date rate.**
-When you sell, the proceeds arrive in USD (and typically stay in a USD brokerage account). For tax purposes, CRA requires proceeds in CAD, so prospero converts using the Bank of Canada rate for the *sale date*. The gain is `proceeds_cad - (acb_per_share_cad x shares_sold)`. Half of the net gain is taxable (50% inclusion rate, `_INCLUSION_RATE` in `acb_engine.py`).
+**(iv) Sale proceeds in USD — converted to CAD at the sale date rate, gain computed in CAD.**
+When you sell, the USD proceeds stay in your brokerage account. For tax purposes CRA requires CAD amounts, so prospero converts using the Bank of Canada rate for the *sale date*: `proceeds_cad = shares_sold × price_usd × rate`. The capital gain is `proceeds_cad - (acb_per_share_cad × shares_sold)` (all CAD). Half of the net gain is taxable (50% inclusion rate, `_INCLUSION_RATE` in `acb_engine.py`).
 
-**(v) Pool shrinks; remaining shares keep the same per-share ACB.**
-After the sale, `total_shares` and `total_acb_cad` are both reduced proportionally. The per-share ACB for remaining shares is unchanged — this is a property of the average-cost method.
+**(v) Pool shrinks; remaining shares keep the same per-share ACB (CAD).**
+After the sale, `total_shares` and `total_acb_cad` are both reduced proportionally. The per-share ACB (in CAD) for remaining shares is unchanged — this is a property of the average-cost method.
 
 **(vi) Cross-year dependency — always import full history.**
-A 2023 partial sale reduces the pool before any 2024 sale computes its ACB. This is why `prospero-acb report --year YYYY` replays *all* transactions from the beginning; it just filters output to the requested year.
+A 2023 partial sale reduces the CAD pool before any 2024 sale computes its ACB. This is why `prospero-acb report --year YYYY` replays *all* transactions from the beginning; it just filters output to the requested year.
 
 ## Workflow
 
