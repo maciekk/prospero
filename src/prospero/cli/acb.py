@@ -29,6 +29,7 @@ from prospero.services.fx import get_rates_for_transactions
 from prospero.services.acb_engine import acb_report, compute_acb_pools
 from prospero.storage.store import load_acb_ledger, save_acb_ledger
 from prospero.display.tables import render_acb_pools, render_capital_gains_report
+from prospero.cli._options import PDF_OPTION
 
 app = typer.Typer(help="ACB tracker for Canadian capital gains tax")
 console = Console()
@@ -137,8 +138,14 @@ def _compute_preview_data(
     return acb_used, pool_acb_after, pool_units_after, pool_acb_cad_after
 
 
-def _render_import_preview(transactions: list[StockTransaction]) -> None:
-    """Print a summary table of transactions about to be imported."""
+def _render_import_preview(
+    transactions: list[StockTransaction],
+) -> tuple[dict, dict, dict, dict, dict]:
+    """Print a summary table of transactions about to be imported.
+
+    Returns (fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map,
+    pool_acb_cad_after_map) so callers can reuse the data (e.g. for PDF output).
+    """
     console.print("[dim]Fetching Bank of Canada USD/CAD rates…[/dim]")
     try:
         fx_rates = get_rates_for_transactions(transactions)
@@ -187,12 +194,14 @@ def _render_import_preview(transactions: list[StockTransaction]) -> None:
             cad_str,
         )
     console.print(table)
+    return fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map
 
 
 @app.command("import")
 def import_csv(
     file: Path = typer.Option(..., "--file", help="Path to CSV file (date,type,ticker,quantity,price)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be imported without saving"),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """
     Import transactions from a CSV file.
@@ -221,16 +230,21 @@ def import_csv(
         console.print("[dim]No transactions found in file.[/dim]")
         return
 
-    _render_import_preview(transactions)
+    preview_data = _render_import_preview(transactions)
 
     if dry_run:
         console.print("[dim]Dry run — nothing saved.[/dim]")
-        return
+    else:
+        ledger = load_acb_ledger()
+        ledger.transactions.extend(transactions)
+        save_acb_ledger(ledger)
+        console.print(f"[green]Imported {len(transactions)} transaction(s).[/green]")
 
-    ledger = load_acb_ledger()
-    ledger.transactions.extend(transactions)
-    save_acb_ledger(ledger)
-    console.print(f"[green]Imported {len(transactions)} transaction(s).[/green]")
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_import_preview
+        fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
+        pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map)
+        console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
 
 
 @app.command("import-ms")
@@ -238,6 +252,7 @@ def import_ms(
     directory: Path = typer.Option(..., "--dir", help="Directory containing the unpacked MS Activity Report"),
     ticker: str = typer.Option(..., help="Ticker symbol for the stock (e.g. GOOG) — not present in MS files"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be imported without saving"),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """
     Import from a Morgan Stanley Activity Report directory.
@@ -263,16 +278,21 @@ def import_ms(
         console.print("[dim]No transactions found in MS activity report.[/dim]")
         return
 
-    _render_import_preview(transactions)
+    preview_data = _render_import_preview(transactions)
 
     if dry_run:
         console.print("[dim]Dry run — nothing saved.[/dim]")
-        return
+    else:
+        ledger = load_acb_ledger()
+        ledger.transactions.extend(transactions)
+        save_acb_ledger(ledger)
+        console.print(f"[green]Imported {len(transactions)} transaction(s).[/green]")
 
-    ledger = load_acb_ledger()
-    ledger.transactions.extend(transactions)
-    save_acb_ledger(ledger)
-    console.print(f"[green]Imported {len(transactions)} transaction(s).[/green]")
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_import_preview
+        fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
+        pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_map, pool_acb_after_map, pool_units_after_map, pool_acb_cad_after_map)
+        console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
 
 
 @app.command("add-opening-balance")
@@ -397,6 +417,7 @@ def add_sell(
 @app.command("show")
 def show(
     output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """Show the current ACB pool for all tickers (shares held and average cost basis)."""
     ledger = load_acb_ledger()
@@ -416,6 +437,10 @@ def show(
         typer.echo(json.dumps([p.model_dump(mode="json") for p in pools], default=_json_default, indent=2))
     else:
         render_acb_pools(pools)
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_acb_pools
+        pdf_acb_pools(pools, output_pdf)
+        console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
 
 
 @app.command("report")
@@ -426,6 +451,7 @@ def report(
         help="Tax year to report on (defaults to the previous calendar year)",
     ),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """
     Show capital gains and losses for a tax year.
@@ -472,3 +498,12 @@ def report(
         if pools:
             console.print()
             render_acb_pools(pools, title=f"Year End Holdings & Cost Basis ({target_year})")
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_capital_gains_report
+        pdf_capital_gains_report(
+            gains, target_year, output_pdf,
+            total_taxable_cad=total_taxable_cad,
+            pools=pools if pools else None,
+            pools_title=f"Year End Holdings & Cost Basis ({target_year})",
+        )
+        console.print(f"[dim]PDF saved to {output_pdf}[/dim]")

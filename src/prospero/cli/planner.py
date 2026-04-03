@@ -9,6 +9,7 @@ from prospero.models.planner import PlannerConfig
 from prospero.services.planner_engine import project
 from prospero.storage.store import load_planner_config, save_planner_config
 from prospero.display.tables import render_plan_summary
+from prospero.cli._options import PDF_OPTION
 
 app = typer.Typer(help="Long-term wealth planner")
 console = Console()
@@ -87,6 +88,7 @@ def configure(
 def run(
     every_n: int = typer.Option(5, "--every", help="Show every Nth year in the table"),
     output_json: bool = typer.Option(False, "--json", help="Output full projection as JSON instead of a table."),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """Run the wealth projection and display results."""
     config = load_planner_config()
@@ -98,6 +100,10 @@ def run(
         typer.echo(summary.model_dump_json(indent=2))
     else:
         render_plan_summary(summary, config, every_n=every_n)
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_plan_summary
+        pdf_plan_summary(summary, config, output_pdf, every_n=every_n)
+        console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
 
 
 

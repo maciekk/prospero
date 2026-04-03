@@ -10,7 +10,7 @@ uv run prospero acb add-opening-balance \
   --shares 287.500 \
   --opening-acb-usd 23806.25
 
-uv run prospero acb import-ms --dir data-sample/complete --ticker ACME
+uv run prospero acb import-ms --dir data-sample/complete --ticker ACME --pdf /tmp/prospero-acb-import.pdf
 
 echo "Now you can run reports; e.g.,"
-echo "  $ uv run prospero acb report --year 2023"
+echo "  $ uv run prospero acb report --year 2023 --pdf acb.pdf"

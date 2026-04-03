@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -10,6 +11,7 @@ from prospero.services.market_data import get_current_prices, MarketDataError
 from prospero.services.portfolio_engine import valuate
 from prospero.storage.store import load_portfolio, save_portfolio
 from prospero.display.tables import render_holdings, render_portfolio_summary
+from prospero.cli._options import PDF_OPTION
 
 app = typer.Typer(help="Stock portfolio tracker")
 console = Console()
@@ -79,6 +81,7 @@ def show(
 @app.command()
 def value(
     output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """Fetch live prices and show full portfolio valuation."""
     portfolio = load_portfolio()
@@ -99,3 +102,7 @@ def value(
         typer.echo(summary.model_dump_json(indent=2))
     else:
         render_portfolio_summary(summary)
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_portfolio_summary
+        pdf_portfolio_summary(summary, output_pdf)
+        console.print(f"[dim]PDF saved to {output_pdf}[/dim]")

@@ -9,6 +9,7 @@ Exposed as both:
 import dataclasses
 import json
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -17,6 +18,7 @@ from rich.console import Console
 from prospero.display.tables import render_tax_breakdown
 from prospero.services.tax import TaxBreakdown, calculate_tax_breakdown
 from prospero.storage.store import load_planner_config
+from prospero.cli._options import PDF_OPTION
 
 app = typer.Typer(help="Canadian income tax breakdown (ON, 2025 base rates)")
 err = Console(stderr=True)
@@ -48,6 +50,7 @@ def breakdown(
         help="Gross income to calculate tax on (e.g. 150000 or $150,000). Defaults to configured salary.",
     ),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
+    output_pdf: Optional[Path] = PDF_OPTION,
 ) -> None:
     """Show a detailed tax breakdown for a given income (ON, Canada, 2025 base rates)."""
     if income is not None:
@@ -64,3 +67,7 @@ def breakdown(
         typer.echo(json.dumps(_breakdown_to_dict(result), default=_json_default, indent=2))
     else:
         render_tax_breakdown(result)
+    if output_pdf is not None:
+        from prospero.display.pdf import pdf_tax_breakdown
+        pdf_tax_breakdown(result, output_pdf)
+        Console().print(f"[dim]PDF saved to {output_pdf}[/dim]")
