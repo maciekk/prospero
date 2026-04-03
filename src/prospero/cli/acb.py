@@ -29,7 +29,7 @@ from prospero.services.fx import get_rates_for_transactions
 from prospero.services.acb_engine import acb_report, compute_acb_pools
 from prospero.storage.store import load_acb_ledger, save_acb_ledger
 from prospero.display.tables import render_acb_pools, render_capital_gains_report
-from prospero.cli._options import PDF_OPTION
+from prospero.cli._options import CSV_OPTION, PDF_OPTION
 
 app = typer.Typer(help="ACB tracker for Canadian capital gains tax")
 console = Console()
@@ -209,6 +209,7 @@ def import_csv(
     file: Path = typer.Option(..., "--file", help="Path to CSV file (date,type,ticker,quantity,price)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be imported without saving"),
     output_pdf: Optional[Path] = PDF_OPTION,
+    output_csv: Optional[Path] = CSV_OPTION,
 ) -> None:
     """
     Import transactions from a CSV file.
@@ -252,6 +253,11 @@ def import_csv(
         fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
         pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
         console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
+    if output_csv is not None:
+        from prospero.display.csv import csv_import_preview
+        fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
+        csv_import_preview(transactions, output_csv, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
+        console.print(f"[dim]CSV saved to {output_csv}[/dim]")
 
 
 @app.command("import-ms")
@@ -260,6 +266,7 @@ def import_ms(
     ticker: str = typer.Option(..., help="Ticker symbol for the stock (e.g. GOOG) — not present in MS files"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview what would be imported without saving"),
     output_pdf: Optional[Path] = PDF_OPTION,
+    output_csv: Optional[Path] = CSV_OPTION,
 ) -> None:
     """
     Import from a Morgan Stanley Activity Report directory.
@@ -300,6 +307,11 @@ def import_ms(
         fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
         pdf_import_preview(transactions, output_pdf, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
         console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
+    if output_csv is not None:
+        from prospero.display.csv import csv_import_preview
+        fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map = preview_data
+        csv_import_preview(transactions, output_csv, fx_rates, acb_used_cad_map, pool_units_after_map, pool_acb_cad_after_map)
+        console.print(f"[dim]CSV saved to {output_csv}[/dim]")
 
 
 @app.command("add-opening-balance")
@@ -465,6 +477,7 @@ def report(
     ),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON instead of a table."),
     output_pdf: Optional[Path] = PDF_OPTION,
+    output_csv: Optional[Path] = CSV_OPTION,
 ) -> None:
     """
     Show capital gains and losses for a tax year.
@@ -520,3 +533,12 @@ def report(
             pools_title=f"Year End Holdings & Cost Basis ({target_year})",
         )
         console.print(f"[dim]PDF saved to {output_pdf}[/dim]")
+    if output_csv is not None:
+        from prospero.display.csv import csv_capital_gains_report
+        csv_capital_gains_report(
+            gains, target_year, output_csv,
+            total_taxable_cad=total_taxable_cad,
+            pools=pools if pools else None,
+            pools_title=f"Year End Holdings & Cost Basis ({target_year})",
+        )
+        console.print(f"[dim]CSV saved to {output_csv}[/dim]")
