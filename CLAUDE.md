@@ -15,46 +15,6 @@ All read commands accept `--json` for machine-readable output.
 
 Per-tool documentation: [docs/portfolio.md](docs/portfolio.md), [docs/planner.md](docs/planner.md), [docs/acb.md](docs/acb.md), [docs/tax.md](docs/tax.md).
 
-## Project Structure
-
-```
-src/prospero/
-├── cli/
-│   ├── app.py          Root Typer app — wires subapps, re-registers tax-breakdown command
-│   ├── acb.py          ACB tracker commands (import, add-vest, add-buy, add-sell, show, report)
-│   ├── planner.py      Wealth planner commands (configure, run, show-config)
-│   ├── portfolio.py    Portfolio commands (add, remove, show, value)
-│   └── tax.py          Tax breakdown command — standalone app + re-used by app.py
-├── models/
-│   ├── acb.py          StockTransaction, TransactionLedger, AcbPoolEntry, CapitalGainEntry
-│   ├── planner.py      PlannerConfig, IncomeChange, YearProjection, PlanSummary
-│   └── portfolio.py    Holding, Portfolio, HoldingValuation, PortfolioSummary
-├── services/
-│   ├── acb_engine.py       compute_acb_pools(), compute_capital_gains(), acb_report()
-│   ├── acb_csv.py          parse_csv() — validates and parses the ACB CSV format
-│   ├── planner_engine.py   project() — runs the year-by-year simulation
-│   ├── portfolio_engine.py valuate() — computes current market value / gains
-│   └── tax.py              calculate_tax_breakdown(), calculate_total_tax(), TaxBreakdown
-├── storage/
-│   └── store.py        load/save for planner (TOML), portfolio (JSON), and ACB ledger (JSON)
-└── display/
-    └── tables.py       Rich table rendering for all output
-
-docs/
-├── acb.md
-├── planner.md
-├── portfolio.md
-└── tax.md
-
-tests/
-├── test_acb_engine.py      ACB pool maintenance, capital gains/losses, cross-year accuracy
-├── test_acb_csv.py         CSV parsing, error collection, edge cases
-├── test_planner_engine.py  Most comprehensive — covers income changes, FIRE, draw-down
-├── test_tax.py             Bracket tests, CPP/EI caps, bracket inflation
-├── test_portfolio_engine.py Gains/losses, totals
-└── test_storage.py         Roundtrip persistence, backward-compat migration
-```
-
 Data is stored in `~/.prospero/`:
 - `planner.toml` — human-editable planner config
 - `portfolio.json` — stock holdings
@@ -107,19 +67,7 @@ app.command("my-shortcut")(new_feature_cli.my_command)
 
 ## ACB Feature
 
-Canada uses the **identical-shares average cost method** (ITA s.47): all shares of the same ticker pool together. The pool state is (`total_shares`, `total_acb_cad`); `acb_per_share_cad = total_acb_cad / total_shares` at any point.
-
-**ACB is always tracked in CAD.** `StockTransaction.price_per_share` is stored in USD (as received from brokers). The engine converts each acquisition to CAD at the Bank of Canada rate for *that acquisition date*, then accumulates the CAD cost into the pool. A single current-day exchange rate cannot be used to derive the CAD ACB from the USD total — the historical per-date rates are baked in. `AcbPoolEntry.total_acb` and `acb_per_share` are in CAD (Optional; None if FX rates were unavailable for any acquisition in the pool).
-
-**Why `acb_engine.py` replays all history for every call.** To compute the correct ACB at the moment of any sale, we must know all prior acquisitions *and* dispositions, even from earlier tax years. For example, a 2023 partial sell reduces the pool before the 2024 sell computes its ACB. `compute_capital_gains(transactions, year, fx_rates)` replays everything and only *emits* entries for the requested year — it does not skip prior-year events.
-
-**RSU vest ACB = FMV at vest.** When shares vest, CRA includes the FMV as employment income on your T4. This means the ACB equals FMV — there is no additional gain to recognise at vesting, only appreciation after vesting becomes a capital gain on eventual sale.
-
-**CSV format** (`services/acb_csv.py`): `date,type,ticker,quantity,price`. Validation collects all row errors before raising so users see the complete list of problems in one pass. Accepts UTF-8 BOM (common in Excel exports). Column names are whitespace- and case-normalised.
-
-**50% inclusion rate** is hardcoded as `Decimal("0.50")` in `acb_engine.py`. If CRA changes this rate (Budget 2024 proposed 2/3 for gains over $250k — not yet law), update `_INCLUSION_RATE` there.
-
-**`acb_report` returns a 3-tuple** `(pools, gains, total_taxable_cad)` — the old 4-tuple with a separate `total_taxable_usd` was removed when ACB tracking was unified to CAD.
+For ACB business logic, design decisions, and non-obvious engine behaviours, see [docs/acb-internals.md](docs/acb-internals.md).
 
 ## Running the Project
 
