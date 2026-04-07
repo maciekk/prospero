@@ -87,6 +87,8 @@ def _price_cad(tx: "StockTransaction") -> str:
 
 def _total_acb_cad(tx: "StockTransaction") -> str:
     """Return a formatted total ACB string (quantity × price) in CAD, falling back to USD."""
+    if tx.transaction_type == TransactionType.OPENING:
+        return f"${tx.quantity * tx.price_per_share:,.2f} CAD"
     try:
         rates = get_rates_for_transactions([tx])
         rate = rates.get(tx.date)
@@ -136,7 +138,18 @@ def _compute_preview_data(
         complete = cad_complete.get(tx.ticker, True)
         rate = fx_rates.get(tx.date)
 
-        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
+        if tx.transaction_type == TransactionType.OPENING:
+            new_shares = shares + tx.quantity
+            share_pools[tx.ticker] = new_shares
+            cost_cad = tx.quantity * tx.price_per_share  # price_per_share is CAD/share for OPENING
+            new_cad_acb = cad_acb + cost_cad
+            cad_pools[tx.ticker] = (new_shares, new_cad_acb)
+            cad_complete[tx.ticker] = complete
+            if id(tx) in new_ids:
+                pool_units_after[id(tx)] = new_shares
+                pool_acb_cad_after[id(tx)] = new_cad_acb.quantize(Decimal("0.01"))
+
+        elif tx.transaction_type in (TransactionType.VEST, TransactionType.BUY):
             cost_usd = tx.quantity * tx.price_per_share
             new_shares = shares + tx.quantity
             share_pools[tx.ticker] = new_shares
@@ -252,13 +265,18 @@ def _render_import_preview(
         cad_str = f"${pool_acb_cad:,.2f}" if pool_acb_cad is not None else "—"
         is_sell = tx.transaction_type == TransactionType.SELL
         qty_str = f"-{tx.quantity}" if is_sell else str(tx.quantity)
+        price_str = (
+            f"${tx.price_per_share:,.2f} CAD"
+            if tx.transaction_type == TransactionType.OPENING
+            else f"${tx.price_per_share:,.2f}"
+        )
         table.add_row(
             str(tx.date),
             tx.transaction_type.value,
             tx.ticker,
             qty_str,
             units_str,
-            f"${tx.price_per_share:,.2f}",
+            price_str,
             rate_str,
             acb_str,
             cad_str,
@@ -386,7 +404,7 @@ def add_opening_balance(
     ticker: str = typer.Option(..., help="Ticker symbol (e.g. GOOG)"),
     date_str: str = typer.Option(..., "--date", help="Date of the opening balance (YYYY-MM-DD) — use the day before your first imported transaction"),
     shares: float = typer.Option(..., "--shares", help="Total shares held as of that date"),
-    opening_acb_usd: float = typer.Option(..., "--opening-acb-usd", help="Total adjusted cost basis in USD (e.g. Acquisition Value from your broker's cost basis statement)"),
+    opening_acb_cad: float = typer.Option(..., "--opening-acb-cad", help="Total adjusted cost basis in CAD (historical cost already converted at the rates when acquired)"),
 ) -> None:
     """
     Seed the ACB pool with shares held before your transaction history begins.
@@ -400,7 +418,7 @@ def add_opening_balance(
         transaction_type=TransactionType.OPENING,
         date=_parse_date(date_str),
         quantity=Decimal(str(shares)),
-        price_per_share=Decimal(str(opening_acb_usd)) / Decimal(str(shares)),
+        price_per_share=Decimal(str(opening_acb_cad)) / Decimal(str(shares)),
     )
     ledger = load_acb_ledger()
     ledger.transactions.append(tx)

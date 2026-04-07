@@ -78,7 +78,14 @@ def compute_acb_pools(
         complete = cad_complete.get(tx.ticker, True)
         rate = fx_rates.get(tx.date) if fx_rates is not None else None
 
-        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
+        if tx.transaction_type == TransactionType.OPENING:
+            new_shares = shares + tx.quantity
+            share_pools[tx.ticker] = new_shares
+            cost_cad = tx.quantity * tx.price_per_share  # price_per_share is CAD/share for OPENING
+            cad_pools[tx.ticker] = (new_shares, cad_acb + cost_cad)
+            cad_complete[tx.ticker] = complete
+
+        elif tx.transaction_type in (TransactionType.VEST, TransactionType.BUY):
             new_shares = shares + tx.quantity
             share_pools[tx.ticker] = new_shares
             cost_usd = tx.quantity * tx.price_per_share
@@ -154,7 +161,13 @@ def compute_capital_gains(
         cad_shares, cad_acb = cad_pools.get(tx.ticker, (Decimal("0"), Decimal("0")))
         rate = fx_rates.get(tx.date) if fx_rates is not None else None
 
-        if tx.transaction_type in (TransactionType.OPENING, TransactionType.VEST, TransactionType.BUY):
+        if tx.transaction_type == TransactionType.OPENING:
+            new_shares = shares + tx.quantity
+            share_pools[tx.ticker] = new_shares
+            cost_cad = tx.quantity * tx.price_per_share  # price_per_share is CAD/share for OPENING
+            cad_pools[tx.ticker] = (new_shares, cad_acb + cost_cad)
+
+        elif tx.transaction_type in (TransactionType.VEST, TransactionType.BUY):
             new_shares = shares + tx.quantity
             share_pools[tx.ticker] = new_shares
             cost_usd = tx.quantity * tx.price_per_share

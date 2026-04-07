@@ -29,7 +29,7 @@ uv run prospero acb add-opening-balance \
   --ticker ACME \
   --date 2022-12-31 \
   --shares 287.500 \
-  --opening-acb-usd 23806.25
+  --opening-acb-cad 31900.00
 
 # 2. Import the MS activity report
 uv run prospero acb import-ms --dir data-sample/complete --ticker ACME
@@ -46,6 +46,6 @@ uv run prospero acb report --year 2025
 |--------------------|--------------|----------------------------------------------------|
 | `--date`           | `2022-12-31` | One day before the first vest on 25-Jan-2023       |
 | `--shares`         | `287.500`    | Shares held prior to the activity report           |
-| `--opening-acb-usd`| `23806.25`   | ≈ $82.80/share avg cost — below the Jan 2023 FMV  |
+| `--opening-acb-cad`| `31900.00`   | ≈ $110.96/share avg cost in CAD — below the Jan 2023 FMV  |
 
-The opening ACB comes from a broker cost-basis statement (e.g. the "Acquisition Value" column in the Schwab/MS cost basis report). It represents the total adjusted cost of all shares held as of that date, in USD.
+The opening ACB comes from a broker cost-basis statement (e.g. the "Acquisition Value" column in the MS cost basis report, requested in CAD). It represents the total adjusted cost of all shares held as of that date, already converted to CAD at the historical exchange rates when each lot was acquired.

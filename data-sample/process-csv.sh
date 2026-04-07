@@ -8,7 +8,7 @@ uv run prospero acb add-opening-balance \
   --ticker ACME \
   --date 2022-12-31 \
   --shares 287.500 \
-  --opening-acb-usd 23806.25
+  --opening-acb-cad 31900.00
 
 uv run prospero acb import-ms --dir data-sample/complete --ticker ACME --pdf /tmp/prospero-acb-import.pdf
 

@@ -79,13 +79,13 @@ Unpack the Activity Report zip and point `import-ms` at the folder — no manual
 >
 > 1. Log in to MS Stockplan Connect → Reports → Vested Share Holdings
 > 2. Set the date to **Dec 31 of the year before your earliest import** (e.g. Dec 31, 2024 if importing from 2025 onward)
-> 3. Make sure to specify **USD** currency (native)
+> 3. Make sure to specify **CAD** currency so the Acquisition Value reflects historical exchange rates
 > 4. Note *Number of Shares* and *Acquisition Value* for your ticker
 >    *(MS defines Acquisition Value as FMV at vest × shares held, which equals total ACB for RSUs)*
 > 5. Run:
 >    ```bash
 >    prospero-acb add-opening-balance --ticker GOOG --date 2024-12-31 \
->      --shares <Number of Shares> --opening-acb-usd <Acquisition Value>
+>      --shares <Number of Shares> --opening-acb-cad <Acquisition Value>
 >    ```
 
 ```bash
@@ -127,7 +127,7 @@ prospero-acb import --file transactions.csv
 ```bash
 # Seed shares held before your transaction history begins
 prospero-acb add-opening-balance --ticker GOOG --date 2024-12-31 \
-  --shares 100 --opening-acb-usd 15000
+  --shares 100 --opening-acb-cad 20000
 
 # Record an RSU vesting event (FMV at vest = ACB)
 prospero-acb add-vest --ticker AAPL --date 2024-01-15 --quantity 25 --fmv 185.50
